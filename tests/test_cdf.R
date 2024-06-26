@@ -43,9 +43,15 @@ timestep_data <- lpjmlkit::read_cdf(nc_in_file = soilc_timestep_file,
 fpc_file_meta <- "/p/projects/open/Fabian/runs/metrics_cdf/output/lu_1500_2016/fpc.nc.json"
 fpc_meta_read <- read_io(filename = fpc_file_meta)
 
+
 # testing read_io
 fpc_file <- "/p/projects/open/Fabian/runs/metrics_cdf/output/lu_1500_2016/fpc.nc"
 data <- read_io(filename = fpc_file)
+
+# test sdate var type
+sdate_file <- "/p/projects/open/Fabian/runs/metrics_cdf/output/lu_1500_2016/sdate.nc"
+sdate_meta <- lpjmlkit::read_cdf_header(nc_in_file = sdate_file)
+
 
 # directly calling read_io with subsetting does not work yet ...
 devtools::load_all("/p/projects/open/Fabian/LPJbox/lpjmlkit_read_cdf/")
@@ -54,3 +60,11 @@ read_data <- read_io(filename = fpc_file,
                      subset = list(year = as.character(2000:2005), 
                           band = c("natural stand fraction", 
                                     "tropical broadleaved evergreen tree")))
+
+# test reading in a regular file and converting it to lat-lon
+fpc_json_file <- "/p/projects/open/Fabian/runs/metrics_202308/output/lu_1500_2016/fpc.bin.json"
+fpc_json_read_data <- read_io(filename = fpc_json_file, 
+                     subset = list(year = as.character(2000:2005), 
+                                   band = c("natural stand fraction", 
+                                            "tropical broadleaved evergreen tree")))
+fpc_json_read_data_lat_lon <- transform(fpc_json_read_data, to = "lon_lat")

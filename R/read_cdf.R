@@ -145,8 +145,10 @@ read_cdf_header <- function( nc_in_file,
   empty_meta$nyear <- nyears
   empty_meta$firstyear <- firstyr
   empty_meta$lastyear <- lastyr
-  empty_meta$ncell <- NULL # no lpjml grid info available yet 
-  empty_meta$firstcell <- NULL # no lpjml grid info available yet 
+  #empty_meta$ncell <- NULL # no lpjml grid info available yet 
+  empty_meta$ncell <- nlonin*nlatin # changed for testing
+  #empty_meta$firstcell <- NULL # no lpjml grid info available yet 
+  empty_meta$firstcell <- 0 # changed for testing
   empty_meta$cellsize_lon <- resolution_lon
   empty_meta$cellsize_lat <- resolution_lat # can be negative if flipped in cdf
   empty_meta$format <- file_type

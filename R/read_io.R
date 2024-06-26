@@ -402,22 +402,14 @@ read_io <- function( # nolint:cyclocomp_linter.
     dimn <- dimnames(file_data)
 
     # update meta data according to subset
-    if (!is.null(subset$year)) {
-      # todo: change this to work (.update_subset function?)
-      meta_data$firstyear <- dimn$year[1]
-      meta_data$lastyear <- dimn$year[length(dimn$year)]
-      meta_data$nyear <- length(dimn$year)
-      meta_data$subset <- TRUE
-    }
-    if (!is.null(subset$band)) {
-      meta_data$band_names <- dimn$band
-      meta_data$nbands <- length(dimn$band)
-      meta_data$subset <- TRUE
+    if (length(subset) > 0) {
+      meta_data$.__update_subset__(subset)
     }
     
     # todo: directly create LPJmLData object from lat-lon
     latlon_data <- LPJmLData$new(data = file_data,
                                 meta_data = meta_data)
+    
     latlon_data
   }# end if !cdf
 
