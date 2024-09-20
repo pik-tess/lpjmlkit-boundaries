@@ -145,7 +145,7 @@ LPJmLData$set("private",
 
       # Handle grid data, only min and max reasonable
       if (!is.null(private$.meta$variable) &&
-          private$.meta$variable == "grid") {
+          private$.meta$variable %in% c("grid", "cellid")) {
         # Handle LPJmLGridData, "cell" for "band"
         if (class(self)[1] == "LPJmLGridData" &&
             private$.meta$._space_format_ == "lon_lat" &&

@@ -1,53 +1,96 @@
 # utility function to determine time resolution of a netcdf file
-get_timestep <- function(file_nc){
+get_timestep <- function(file_nc) {
   tunit <- file_nc$dim$time$units
-  tvals <- file_nc$dim$time$vals
-  timestep <- 1 # default
-  if (grepl("years since", tunit, ignore.case = TRUE)){
-    tres <- "annual"
-    baseyr <- as.integer(unlist(strsplit(unlist(strsplit(tunit, split = ' ', 
-                              fixed = TRUE))[3], split = '-', fixed = TRUE))[1])
-    offset_yr <- tvals[1]
-    firstyr <- baseyr + offset_yr
-  }else if (grepl("year", tunit, ignore.case = TRUE)){
-    tres <- "annual"
-    firstyr <- tvals[1]
-    timestep <- tvals[2]-tvals[1]
-  }else if (grepl("days since", tunit, fixed = TRUE)){
-    ddiff <- tvals[2]-tvals[1]
-    baseyr <- as.integer(unlist(strsplit(unlist(strsplit(tunit, split = ' ', 
-                            fixed = TRUE))[3], split = '-', fixed = TRUE))[1])
-    offset_yr <- floor(tvals[1]/365)
-    firstyr <- baseyr + offset_yr
-    if (ddiff > 27 && ddiff < 32){
-      tres <- "monthly"
-    }else if (ddiff > 364 && ddiff < 367){
-      tres <- "annual"
-    }else if (ddiff == 1){
-      tres <- "daily"
-    }else{
+
+  if (is.null(tunit)) {
+    return(NULL)
+  }
+
+  time_values <- file_nc$dim$time$vals
+  # default
+  timestep <- 1
+
+  if (grepl("years since", tunit, ignore.case = TRUE)) {
+    time_res <- "annual"
+    base_year <- as.integer(
+      unlist(
+        strsplit(
+          unlist(
+            strsplit(
+              tunit,
+              split = " ",
+              fixed = TRUE
+            )
+          )[3],
+          split = "-",
+          fixed = TRUE
+        )
+      )[1]
+    )
+    offset_year <- time_values[1]
+    first_year <- base_year + offset_year
+
+  } else if (grepl("year", tunit, ignore.case = TRUE)) {
+    time_res <- "annual"
+    first_year <- time_values[1]
+    timestep <- time_values[2] - time_values[1]
+
+  } else if (grepl("days since", tunit, fixed = TRUE)) {
+    ddiff <- time_values[2] - time_values[1]
+    base_year <- as.integer(
+      unlist(
+        strsplit(
+          unlist(
+            strsplit(
+              tunit,
+              split = " ",
+              fixed = TRUE
+            )
+          )[3],
+          split = "-",
+          fixed = TRUE
+        )
+      )[1]
+    )
+
+    offset_year <- floor(time_values[1] / 365)
+    first_year <- base_year + offset_year
+
+    if (ddiff > 27 && ddiff < 32) {
+      time_res <- "monthly"
+    } else if (ddiff > 364 && ddiff < 367) {
+      time_res <- "annual"
+    } else if (ddiff == 1) {
+      time_res <- "daily"
+    } else {
       stop("Automatic detection of firstyear and time resolution failed.")
     }
-  }else{
+  } else {
     stop("Automatic detection of firstyear and time resolution failed.")
   }
-  return(list(tres = tres, firstyr = as.numeric(firstyr), timestep = timestep))
+
+  return(list(time_res = time_res, first_year = as.numeric(first_year), timestep = timestep))
 }
 
 # utility function to guess the main variable of a netcdf file
-get_main_variable <- function(file_nc){
-  for (var in names(file_nc$var)){
+get_main_variable <- function(file_nc) {
+  for (var in names(file_nc$var)) {
     ndims <- file_nc$var[[var]]$ndims
-    dimNames <- c()
-    for (d in 1:ndims){
-      dimNames <- append(dimNames,file_nc$var[[var]]$dim[[d]]$name) 
+    dim_names <- c()
+    for (d in 1:ndims) {
+      dim_names <- append(dim_names, file_nc$var[[var]]$dim[[d]]$name)
     }
-    #print(paste0(var,paste(dimNames,collapse = ",")))
-    if (grepl("lon",paste(dimNames,collapse = " "),ignore.case = T) && grepl("lat",paste(dimNames,collapse = " "),ignore.case = T)){
+    if (grepl("lon", paste(dim_names, collapse = " "), ignore.case = TRUE) &&
+        grepl("lat", paste(dim_names, collapse = " "), ignore.case = TRUE)
+    ) {
       return(var)
     }
   }
-  print(paste0("None of the variables could certainly be identified as main variable, guessing the last one: ",var))
+  message(
+    "None of the variables could certainly be identified as main variable,",
+    "guessing the last one: ",
+    var
+  )
   return(var)
 }
 
@@ -58,113 +101,122 @@ get_main_variable <- function(file_nc){
 #' - check calendar for irregularities (leapdays)?
 #'
 #' @param nc_in_file netcdf file name
-#' @param var optional variable to be read, in case automatic detection does 
+#' @param var optional variable to be read, in case automatic detection does
 #'        not work as intended or several variables are stored within the file
-#' @param silent whether to suppress the info "reading file XYZ" 
+#' @param silent whether to suppress the info "reading file XYZ"
 #'        (default TRUE)
 #'
 #' @return header data
 #'
 #' @examples
 #' \dontrun{
+#'
 #' }
 #'
 #' @export
-read_cdf_header <- function( nc_in_file, 
-                             var = NULL,
-                             silent = TRUE
-) {
+read_cdf_header <- function(nc_in_file,
+                            var = NULL,
+                            silent = TRUE) {
   file_type <- lpjmlkit::detect_io_type(filename = nc_in_file)
-  #read_cdf_meta <- lpjmlkit::read_meta(filename = fpc_file_meta)
 
   file_nc <- ncdf4::nc_open(filename = nc_in_file)
   varnames <- names(file_nc$var)
   if (is.null(var)) var <- get_main_variable(file_nc = file_nc)
-  
-  # get the first of the variable names that has not been identified as the 
+
+  # get the first of the variable names that has not been identified as the
   # main variable
-  if (length(varnames)>1){
-    bands_var_name <- varnames[-match(var,varnames)][1]
+  if (length(varnames) > 1) {
+    bands_var_name <- varnames[-match(var, varnames)][1]
     bands <- ncdf4::ncvar_get(nc = file_nc, varid = bands_var_name)
-  }else{
+  } else {
     bands_var_name <- ""
     bands <- 1
   }
 
   # get lon/lat information
-  dimnames <- names(file_nc$dim)
-  latdim <- which(grepl("lat", dimnames, ignore.case = TRUE))
-  londim <- which(grepl("lon", dimnames, ignore.case = TRUE))
+  dim_names <- names(file_nc$dim)
+  latdim <- which(grepl("lat", dim_names, ignore.case = TRUE))
+  londim <- which(grepl("lon", dim_names, ignore.case = TRUE))
   lon <- file_nc$dim[[londim]]$vals
   lat <- file_nc$dim[[latdim]]$vals
-  nlonin <- length(lon)
-  nlatin <- length(lat)
-  
-  # take the median difference between the cells as the resolution
-  spatial_difference_lon <- lon[2:length(lon)] - lon[1:(length(lon)-1)]
-  resolution_lon <- median(spatial_difference_lon)
-  spatial_difference_lat <- lat[2:length(lat)] - lat[1:(length(lat)-1)]
-  resolution_lat <- median(spatial_difference_lat)
-  
-  ndims <- file_nc$var[[var]]$ndims
-  tunit <- file_nc$dim$time$units
-  tvals <- file_nc$dim$time$vals
-  timing <- get_timestep(file_nc = file_nc)
-  tres <- timing$tres
-  firstyr <- timing$firstyr
-  timestep <- timing$timestep
+  nlon <- length(lon)
+  nlat <- length(lat)
 
-  if (tres == "annual"){
-    nyears <- length(tvals)
-    nsteps <- 1
-  }else if (tres == "monthly"){
-    nyears <- length(tvals)/12
-    nsteps <- 12
-  }else if (tres == "daily"){
-    nyears <- length(tvals)/365
-    nsteps <- 365
-    if (!all.equal(round(nyears,0), nyears)) 
-       stop("Number of time records not a multiple of 365 - pls check calendar")
-  }
-  if (timestep == 1) lastyr <- firstyr + nyears - 1
-  else lastyr <- tvals[length(tvals)]
-    
+  # take the median difference between the cells as the resolution
+  spatial_difference_lon <- lon[2:length(lon)] - lon[1:(length(lon) - 1)]
+  resolution_lon <- median(spatial_difference_lon)
+  spatial_difference_lat <- lat[2:length(lat)] - lat[1:(length(lat) - 1)]
+  resolution_lat <- median(spatial_difference_lat)
+
   global_attributes <- ncdf4::ncatt_get(file_nc, 0)
   var_attributes <- ncdf4::ncatt_get(file_nc, var)
 
-  empty_meta <- list()
-  empty_meta$sim_name <- global_attributes$title
-  empty_meta$source <- global_attributes$source
-  empty_meta$history <- global_attributes$history
-  empty_meta$name <- tolower(var)
-  empty_meta$variable <- var
-  empty_meta$descr <- var_attributes$long_name
-  empty_meta$unit <- var_attributes$units
-  empty_meta$nbands <- length(bands)
-  empty_meta$band_names <- bands
-  empty_meta$nyear <- nyears
-  empty_meta$firstyear <- firstyr
-  empty_meta$lastyear <- lastyr
-  #empty_meta$ncell <- NULL # no lpjml grid info available yet 
-  empty_meta$ncell <- nlonin*nlatin # changed for testing
-  #empty_meta$firstcell <- NULL # no lpjml grid info available yet 
-  empty_meta$firstcell <- 0 # changed for testing
-  empty_meta$cellsize_lon <- resolution_lon
-  empty_meta$cellsize_lat <- resolution_lat # can be negative if flipped in cdf
-  empty_meta$format <- file_type
-  empty_meta$filename <- basename(nc_in_file)
-  empty_meta$nstep <- nsteps
-  empty_meta$subset <- FALSE
-  empty_meta$datatype <- file_nc$var[[var]]$prec
-  
-  empty_meta$timestep <- timestep # todo: internally in lpjml is sth different
-  empty_meta$scalar <- 1 # todo: can netcdf be scaled?
-  empty_meta$order <- "cellseq" # not relevant, so keep default
-  empty_meta$bigendian <- FALSE # not relevant, so keep default
-  
+  meta_list <- list()
+
+  time_values <- file_nc$dim$time$vals
+  time_info <- get_timestep(file_nc = file_nc)
+
+  if (!is.null(time_info)) {
+    time_res <- time_info$time_res
+    meta_list$firstyear <- time_info$first_year
+    meta_list$timestep <- time_info$timestep
+
+    if (time_res == "annual") {
+      meta_list$nyear <- length(time_values)
+      meta_list$nstep <- 1
+    } else if (time_res == "monthly") {
+      meta_list$nyear <- length(time_values) / 12
+      meta_list$nstep <- 12
+    } else if (time_res == "daily") {
+      meta_list$nyear <- length(time_values) / 365
+      meta_list$nstep <- 365
+      if (!all.equal(round(meta_list$nyear, 0), meta_list$nyear)) {
+        stop("Number of time records not a multiple of 365 - pls check calendar")
+      }
+    }
+    if (meta_list$timestep == 1) {
+      meta_list$lastyear <- meta_list$first_year + meta_list$nyear - 1
+    } else {
+      meta_list$lastyear <- time_values[length(time_values)]
+    }
+  } else if (!var %in% c("cellid", "grid", "LPJGRID")) {
+    stop("Time information could not be extracted from the netcdf file.")
+  } else {
+    meta_list$firstyear <- 0
+    meta_list$lastyear <- 0
+    meta_list$nyear <- 1
+    meta_list$nstep <- 1
+    meta_list$timestep <- 1
+  }
+
+  meta_list$sim_name <- global_attributes$title
+  meta_list$source <- global_attributes$source
+  meta_list$history <- global_attributes$history
+  meta_list$name <- tolower(var)
+  meta_list$variable <- var
+  meta_list$descr <- var_attributes$long_name
+  meta_list$unit <- var_attributes$units
+  meta_list$nbands <- length(bands)
+  meta_list$band_names <- bands
+
+  meta_list$ncell <- nlon * nlat # changed for testing
+  meta_list$firstcell <- 0 # changed for testing
+
+  meta_list$cellsize_lon <- resolution_lon
+  meta_list$cellsize_lat <- resolution_lat # can be negative if flipped in cdf
+
+  meta_list$format <- file_type
+  meta_list$filename <- basename(nc_in_file)
+  meta_list$subset <- FALSE
+  meta_list$datatype <- file_nc$var[[var]]$prec
+
+  meta_list$scalar <- 1 # todo: can netcdf be scaled?
+  meta_list$order <- "cellseq" # not relevant, so keep default
+  meta_list$bigendian <- FALSE # not relevant, so keep default
+
   ncdf4::nc_close(file_nc)
-  
-  header_data <- lpjmlkit::LPJmLMetaData$new(x = empty_meta)
+
+  header_data <- lpjmlkit::LPJmLMetaData$new(x = meta_list)
   header_data
 }
 
@@ -175,31 +227,34 @@ read_cdf_header <- function( nc_in_file,
 #' - subsetting cells/days/months does not work yet
 #'
 #' @param nc_in_file netcdf file name
-#' @param nc_header header data, read in from either meta file or data in 
+#' @param nc_header header data, read in from either meta file or data in
 #'        netcdf file
 #' @param subset list object defining which subset of the data to be read
-#' @param silent whether to suppress the info "reading file XYZ" 
+#' @param silent whether to suppress the info "reading file XYZ"
 #'        (default TRUE)
 #'
 #' @return array with netcdf's data, dim=c(nlon,nlat,bands,steps (months/days),years)
 #'
 #' @examples
 #' \dontrun{
+#'
 #' }
 #'
 #' @export
-read_cdf <- function( nc_in_file, 
-                      nc_header,
-                      subset = list(),
-                      silent = TRUE
-) {
+read_cdf <- function(
+    nc_in_file,
+    nc_header,
+    subset = list(),
+    silent = TRUE) {
   var <- nc_header$variable
   file_nc <- ncdf4::nc_open(filename = nc_in_file)
   if (!silent) {
     print(paste0("Reading in: ", nc_in_file))
-    print(paste0("Attempting to read variable: ",var,
-                 ". If this is not correct,",
-                 " please specify manually via argument var."))
+    print(paste0(
+      "Attempting to read variable: ", var,
+      ". If this is not correct,",
+      " please specify manually via argument var."
+    ))
   }
 
   # Determine all years in the file
@@ -215,11 +270,11 @@ read_cdf <- function( nc_in_file,
     } else {
       years <- as.integer(subset[["year"]])
     }
-  }else{
+  } else {
     years <- years_raw
   }
-  ngetyears <- length(years) # years[length(years)] - years[1] + 1
-  
+  ntimesteps <- nc_header$nyear * nc_header$nstep
+
   # bands to read
   if ("band" %in% names(subset)) {
     if (nc_header$nbands == 1) stop("Can't extract bands from single band input.")
@@ -228,43 +283,106 @@ read_cdf <- function( nc_in_file,
     } else {
       band_subset_ids <- match(subset[["band"]], nc_header$band_names)
     }
-  }else{
-    band_subset_ids <- c(1)
+  } else {
+    band_subset_ids <- seq_len(nc_header$nbands)
   }
   nbands <- length(band_subset_ids)
-  
+
   # get lon/lat information - not part of header yet
-  dimnames <- names(file_nc$dim)
-  latdim <- which(grepl("lat", dimnames, ignore.case = TRUE))
-  londim <- which(grepl("lon", dimnames, ignore.case = TRUE))
+  dim_names <- names(file_nc$dim)
+  latdim <- which(grepl("lat", dim_names, ignore.case = TRUE))
+  londim <- which(grepl("lon", dim_names, ignore.case = TRUE))
   lon <- file_nc$dim[[londim]]$vals
   lat <- file_nc$dim[[latdim]]$vals
-  nlonin <- length(lon)
-  nlatin <- length(lat)
-  
-  outdata <- array(0, dim = c(nlonin, nlatin, nbands, nc_header$nstep, ngetyears))
+  nlon <- length(lon)
+  nlat <- length(lat)
 
-  for (year in years){
-    for (step in seq_along(nc_header$nstep)){
-      year_index_input <- match(year,years_raw)
-      year_index_output <- match(year,years)
-      if (nc_header$nbands == 1){
-        #print(paste(year,nc_header$firstyear,step,nc_header$nstep,nc_header$nbands,((year - nc_header$firstyear)*nc_header$nstep + step),sep=","))
-        data <- ncdf4::ncvar_get(nc = file_nc, varid = var, count=c(-1,-1,1),
-                              start=c(1,1,((year_index_input - 1)*nc_header$nstep + step)))
-        outdata[,,1,step,year_index_output] <- data
-      }else{ #nbands>1
-        data <- ncdf4::ncvar_get(nc = file_nc, varid = var, count=c(-1,-1,-1,1),
-                          start=c(1,1,1,((year_index_input - 1)*nc_header$nstep + step)))
-        outdata[,,,step,year_index_output] <- data[,,band_subset_ids]
-      }# end if nbands == 1
-    }# end for step
-  }# end for year
+  if (length(dim_names) > 2) {
+    outdata <- array(
+      NA,
+      dim = c(
+        nlon,
+        nlat,
+        ntimesteps,
+        nbands
+      )
+    )
+
+    for (i_time in ntimesteps) {
+      if (nc_header$nbands == 1) {
+        data <- ncdf4::ncvar_get(
+          nc = file_nc, varid = var, count = c(-1, -1, 1),
+          start = c(1, 1, i_time)
+        )
+        outdata[, , i_time, 1] <- data
+      } else {
+        data <- ncdf4::ncvar_get(
+          nc = file_nc,
+          varid = var,
+          count = c(-1, -1, -1, 1),
+          start = c(1, 1, 1, i_time)
+        )
+        outdata[, , i_time, ] <- data[, , band_subset_ids]
+      } # end if nbands == 1
+    }
+
+    dim(outdata) <- c(
+      lon = nlon,
+      lat = nlat,
+      time = ntimesteps,
+      band = nbands
+    )
+    dimnames(outdata) <- list(
+      lon = lon,
+      lat = lat,
+      time = create_time_names(
+        nstep = default(nc_header$nstep, 1),
+        years = years
+      ),
+      band = nc_header$band_names[band_subset_ids]
+    )
+
+  } else if (length(dim_names) == 2) {
+    outdata <- array(
+      NA,
+      dim = c(
+        nlon,
+        nlat,
+        nbands
+      )
+    )
+
+    if (nc_header$nbands == 1) {
+      data <- ncdf4::ncvar_get(
+        nc = file_nc, varid = var, count = c(-1, -1),
+        start = c(1, 1)
+      )
+      outdata[, , 1] <- data
+    } else {
+      data <- ncdf4::ncvar_get(
+        nc = file_nc,
+        varid = var,
+        count = c(-1, -1, 1),
+        start = c(1, 1, 1)
+      )
+      outdata[, , ] <- data[, , band_subset_ids]
+    } # end if nbands == 1
+
+    dim(outdata) <- c(
+      lon = nlon,
+      lat = nlat,
+      band = nbands
+    )
+    dimnames(outdata) <- list(
+      lon = lon,
+      lat = lat,
+      band = nc_header$band_names[band_subset_ids]
+    )
+
+  } else {
+    stop("No spatial information found in netcdf file.")
+  }
   ncdf4::nc_close(file_nc)
-  dim(outdata) <- c(lon = nlonin, lat = nlatin, band = nbands,
-                    step = nc_header$nstep, year = ngetyears)
-  dimnames(outdata) <- list(lon = lon, lat = lat, band = nc_header$band_names[band_subset_ids],
-                            step = 1:nc_header$nstep, year = years)
 
   return(outdata)
 }

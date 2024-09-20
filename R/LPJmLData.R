@@ -39,8 +39,14 @@ LPJmLData <- R6::R6Class( # nolint:object_name_linter
         # If user has not supplied any parameters try to find a grid file in the
         # same directory as data. This throws an error if no suitable file is
         # found.
-        filename <- find_varfile(private$.meta$._data_dir_, "grid")
-
+        if (!is.null(private$.meta$grid)) {
+          filename <- file.path(
+            private$.meta$._data_dir_,
+            private$.meta$grid$filename
+          )
+        } else {
+          filename <- find_varfile(private$.meta$._data_dir_, "grid")
+        }
         message(
           paste0(
             col_var("grid"),

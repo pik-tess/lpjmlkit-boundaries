@@ -56,7 +56,14 @@ LPJmLGridData <- R6::R6Class( # nolint:object_name_linter
     initialize = function(lpjml_data) {
 
       x <- lpjml_data$clone(deep = TRUE)
-      x$transform(to = "cell")
+
+      if (lpjml_data$meta$format %in% c("raw", "clm")) {
+        x$transform(to = "cell")
+      } else if (lpjml_data$meta$format == "cdf") {
+        x$transform(to = "lon_lat")
+      } else {
+        stop("Unknown format for LPJmLGridData initialization.")
+      }
 
       # Clone LPJmLMetaData data into meta attribute
       private$.meta <- x$meta
@@ -113,13 +120,18 @@ LPJmLGridData <- R6::R6Class( # nolint:object_name_linter
     init_grid = function() {
 
       # Update grid data
-      if (dim(private$.data)[["band"]] == 2) {
+      if (dim(private$.data)[["band"]] == 2 && private$.meta$format == "raw") {
         dimnames(private$.data)[["band"]] <- c("lon", "lat")
+      } else if (dim(private$.data)[["band"]] == 1 &&
+          private$.meta$format == "cdf"
+      ) {
+        dimnames(private$.data)[["band"]] <- "cell"
+
       } else {
         stop("Unknown number of bands for grid initialization.")
       }
 
-      # Update grid meta data
+      # Drop band dimension for grid data
       self$.__set_data__(
         drop_omit(self$data, omit = "cell")
       )

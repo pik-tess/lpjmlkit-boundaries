@@ -320,7 +320,7 @@ read_io <- function( # nolint:cyclocomp_linter.
   # warnings should have been triggered in read_io_metadata already.
   file_header <- meta_data$as_header(silent = TRUE)
 
-  if (!meta_data$format == "cdf"){
+  if (!meta_data$format == "cdf") {
     # Check file size
     # Check if file is an LPJDAMS input file, which has a different format.
     if (get_header_item(file_header, "name") == "LPJDAMS") {
@@ -350,7 +350,7 @@ read_io <- function( # nolint:cyclocomp_linter.
         " attributes."
       )
     }
-  
+
     # Check whether nbands may actually be nstep
     if (!silent && get_header_item(file_header, "version") < 4 &&
           get_header_item(file_header, "nstep") == 1 &&
@@ -396,10 +396,9 @@ read_io <- function( # nolint:cyclocomp_linter.
     rm(file_data, meta_data)
     lpjml_data
     
-  }else{# format=="cdf"
+  } else {
     
     file_data <- read_cdf(filename, meta_data, subset, silent)
-    dimn <- dimnames(file_data)
 
     # update meta data according to subset
     if (length(subset) > 0) {
@@ -480,12 +479,11 @@ read_io_metadata_cdf <- function(filename, ...) {
   # Read file_header
   meta_data <- read_cdf_header(filename)
   file_header <- meta_data$as_header()
-  
-  #browser()
+
   # Check validity of band_names
   check_band_names(get_header_item(file_header, "nbands"),
                    meta_data$band_names)
-  
+
   # Prepare additional attributes to be added to meta information
   additional_attributes <- list(
     band_names = unname(meta_data$band_names),
