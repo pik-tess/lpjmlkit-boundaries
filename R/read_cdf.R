@@ -74,24 +74,24 @@ get_timestep <- function(file_nc) {
 
 # utility function to guess the main variable of a netcdf file
 get_main_variable <- function(file_nc) {
-  for (var in names(file_nc$var)) {
-    ndims <- file_nc$var[[var]]$ndims
+  for (variable_name in names(file_nc$var)) {
+    ndims <- file_nc$var[[variable_name]]$ndims
     dim_names <- c()
     for (d in 1:ndims) {
-      dim_names <- append(dim_names, file_nc$var[[var]]$dim[[d]]$name)
+      dim_names <- append(dim_names, file_nc$var[[variable_name]]$dim[[d]]$name)
     }
     if (grepl("lon", paste(dim_names, collapse = " "), ignore.case = TRUE) &&
         grepl("lat", paste(dim_names, collapse = " "), ignore.case = TRUE)
     ) {
-      return(var)
+      return(variable_name)
     }
   }
   message(
     "None of the variables could certainly be identified as main variable,",
     "guessing the last one: ",
-    var
+    variable_name
   )
-  return(var)
+  return(variable_name)
 }
 
 #' Reads netcdf and returns it header info
@@ -100,8 +100,8 @@ get_main_variable <- function(file_nc) {
 #' Todos:
 #' - check calendar for irregularities (leapdays)?
 #'
-#' @param nc_in_file netcdf file name
-#' @param var optional variable to be read, in case automatic detection does
+#' @param filename netcdf file name
+#' @param variable_name optional variable to be read, in case automatic detection does
 #'        not work as intended or several variables are stored within the file
 #'
 #' @return header data
@@ -112,18 +112,20 @@ get_main_variable <- function(file_nc) {
 #' }
 #'
 #' @export
-read_cdf_header <- function(nc_in_file,
-                            var = NULL) {
-  file_type <- lpjmlkit::detect_io_type(filename = nc_in_file)
+read_cdf_header <- function(filename,
+                            variable_name = NULL) {
+  file_type <- lpjmlkit::detect_io_type(filename = filename)
 
-  file_nc <- ncdf4::nc_open(filename = nc_in_file)
+  file_nc <- ncdf4::nc_open(filename = filename)
   varnames <- names(file_nc$var)
-  if (is.null(var)) var <- get_main_variable(file_nc = file_nc)
+  if (is.null(variable_name)) variable_name <- get_main_variable(
+    file_nc = file_nc
+  )
 
   # get the first of the variable names that has not been identified as the
   # main variable
   if (length(varnames) > 1) {
-    bands_var_name <- varnames[-match(var, varnames)][1]
+    bands_var_name <- varnames[-match(variable_name, varnames)][1]
     bands <- ncdf4::ncvar_get(nc = file_nc, varid = bands_var_name)
   } else {
     bands_var_name <- ""
@@ -146,7 +148,7 @@ read_cdf_header <- function(nc_in_file,
   resolution_lat <- median(spatial_difference_lat)
 
   global_attributes <- ncdf4::ncatt_get(file_nc, 0)
-  var_attributes <- ncdf4::ncatt_get(file_nc, var)
+  var_attributes <- ncdf4::ncatt_get(file_nc, variable_name)
 
   meta_list <- list()
 
@@ -176,7 +178,7 @@ read_cdf_header <- function(nc_in_file,
     } else {
       meta_list$lastyear <- time_values[length(time_values)]
     }
-  } else if (!var %in% c("cellid", "grid", "LPJGRID")) {
+  } else if (!variable_name %in% c("cellid", "grid", "LPJGRID")) {
     stop("Time information could not be extracted from the netcdf file.")
   } else {
     meta_list$firstyear <- 0
@@ -189,8 +191,8 @@ read_cdf_header <- function(nc_in_file,
   meta_list$sim_name <- global_attributes$title
   meta_list$source <- global_attributes$source
   meta_list$history <- global_attributes$history
-  meta_list$name <- tolower(var)
-  meta_list$variable <- var
+  meta_list$name <- tolower(variable_name)
+  meta_list$variable <- variable_name
   meta_list$descr <- var_attributes$long_name
   meta_list$unit <- var_attributes$units
   meta_list$nbands <- length(bands)
@@ -203,9 +205,9 @@ read_cdf_header <- function(nc_in_file,
   meta_list$cellsize_lat <- resolution_lat # can be negative if flipped in cdf
 
   meta_list$format <- file_type
-  meta_list$filename <- basename(nc_in_file)
+  meta_list$filename <- basename(filename)
   meta_list$subset <- FALSE
-  meta_list$datatype <- file_nc$var[[var]]$prec
+  meta_list$datatype <- file_nc$var[[variable_name]]$prec
 
   meta_list$scalar <- 1 # todo: can netcdf be scaled?
   meta_list$order <- "cellseq" # not relevant, so keep default
@@ -213,7 +215,10 @@ read_cdf_header <- function(nc_in_file,
 
   ncdf4::nc_close(file_nc)
 
-  header_data <- lpjmlkit::LPJmLMetaData$new(x = meta_list)
+  header_data <- lpjmlkit::LPJmLMetaData$new(
+    x = meta_list,
+    data_dir = dirname(filename)
+  )
   header_data
 }
 
@@ -223,7 +228,7 @@ read_cdf_header <- function(nc_in_file,
 #' Todos:
 #' - subsetting cells/days/months does not work yet
 #'
-#' @param nc_in_file netcdf file name
+#' @param filename netcdf file name
 #' @param nc_header header data, read in from either meta file or data in
 #'        netcdf file
 #' @param subset list object defining which subset of the data to be read
@@ -236,12 +241,12 @@ read_cdf_header <- function(nc_in_file,
 #' }
 #'
 read_cdf <- function(
-  nc_in_file,
+  filename,
   nc_header,
   subset = list()
 ) {
-  var <- nc_header$variable
-  file_nc <- ncdf4::nc_open(filename = nc_in_file)
+  variable_name <- nc_header$variable
+  file_nc <- ncdf4::nc_open(filename = filename)
 
   # Determine all years in the file
   years_raw <- seq(
@@ -297,14 +302,14 @@ read_cdf <- function(
     for (i_time in ntimesteps) {
       if (nc_header$nbands == 1) {
         data <- ncdf4::ncvar_get(
-          nc = file_nc, varid = var, count = c(-1, -1, 1),
+          nc = file_nc, varid = variable_name, count = c(-1, -1, 1),
           start = c(1, 1, i_time)
         )
         outdata[, , i_time, 1] <- data
       } else {
         data <- ncdf4::ncvar_get(
           nc = file_nc,
-          varid = var,
+          varid = variable_name,
           count = c(-1, -1, -1, 1),
           start = c(1, 1, 1, i_time)
         )
@@ -340,14 +345,14 @@ read_cdf <- function(
 
     if (nc_header$nbands == 1) {
       data <- ncdf4::ncvar_get(
-        nc = file_nc, varid = var, count = c(-1, -1),
+        nc = file_nc, varid = variable_name, count = c(-1, -1),
         start = c(1, 1)
       )
       outdata[, , 1] <- data
     } else {
       data <- ncdf4::ncvar_get(
         nc = file_nc,
-        varid = var,
+        varid = variable_name,
         count = c(-1, -1, 1),
         start = c(1, 1, 1)
       )

@@ -69,17 +69,7 @@ LPJmLData <- R6::R6Class( # nolint:object_name_linter
       } else {
         # All arguments have to be provided manually to read_io.
         #   Ellipsis (...) does that.
-
-        # Add support for cell subsets. This is a rough filter since $subset
-        #   does not say if cell is subsetted - but ok for now.
-        if (private$.meta$._subset_space_) {
-          lpjml_data <- read_io(
-            ...,
-            subset = list(cell = self$dimnames()[["cell"]])
-          )
-        } else {
-          lpjml_data <- read_io(...)
-        }
+        lpjml_data <- read_io(...)
       }
 
       # Create LPJmLData object and bring together data and meta_data
@@ -288,12 +278,49 @@ LPJmLData <- R6::R6Class( # nolint:object_name_linter
     #' @param grid An `LPJmLData` object holding grid coordinates.
     .__set_grid__ = function(grid) {
 
-      if (methods::is(grid, "LPJmLGridData")) {
-        private$.grid <- grid
-
-      } else {
-        stop("Provide an LPJmLGridData to set grid attribute.")
+      if (!methods::is(grid, "LPJmLGridData")) {
+        stop("Provide an LPJmLGridData object to set grid attribute.")
       }
+
+      if (grid$meta$._space_format_ != self$meta$._space_format_) {
+        grid$transform(to = self$meta$._space_format_)
+      }
+
+      if (self$meta$._space_format_ == "lon_lat") {
+        data_dim_names <- dimnames(self$data)
+        grid_dim_names <- dimnames(grid$data)
+
+        # Check if data dimensions match grid dimensions, no subsetting
+        #   supported - too error prone
+        if (!all(data_dim_names$lon == grid_dim_names$lon) ||
+              !all(data_dim_names$lat == grid_dim_names$lat)) {
+          stop(
+            "Data dimensions do not match LPJmL grid dimensions. ",
+            "Please assure data and grid are consistent."
+          )
+        }
+
+        # get LPJmL grid cells from grid data
+        cell_dimnames <- sort(grid$data) %>%
+          format(trim = TRUE, scientific = FALSE, justify = "none")
+
+        # Update meta data of data object
+        private$.meta$.__update_subset__(
+          subset = list(cell = cell_dimnames),
+          cell_dimnames = cell_dimnames
+        )
+
+      } else if (private$.meta$._space_format_ == "cell") {
+
+        # Add support for cell subsets. This is a rough filter since $subset
+        #   does not say if cell is subsetted - but ok for now.
+        if (self$meta$._subset_space_) {
+          grid$subset(cell = list(cell = self$dimnames()[["cell"]]))
+        }
+      }
+
+      # Set grid attribute
+      private$.grid <- grid
     },
 
 
