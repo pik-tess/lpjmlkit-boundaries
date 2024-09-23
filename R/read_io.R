@@ -398,7 +398,7 @@ read_io <- function( # nolint:cyclocomp_linter.
     
   } else {
     
-    file_data <- read_cdf(filename, meta_data, subset, silent)
+    file_data <- read_cdf(filename, meta_data, subset)
 
     # update meta data according to subset
     if (length(subset) > 0) {

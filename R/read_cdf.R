@@ -103,8 +103,6 @@ get_main_variable <- function(file_nc) {
 #' @param nc_in_file netcdf file name
 #' @param var optional variable to be read, in case automatic detection does
 #'        not work as intended or several variables are stored within the file
-#' @param silent whether to suppress the info "reading file XYZ"
-#'        (default TRUE)
 #'
 #' @return header data
 #'
@@ -115,8 +113,7 @@ get_main_variable <- function(file_nc) {
 #'
 #' @export
 read_cdf_header <- function(nc_in_file,
-                            var = NULL,
-                            silent = TRUE) {
+                            var = NULL) {
   file_type <- lpjmlkit::detect_io_type(filename = nc_in_file)
 
   file_nc <- ncdf4::nc_open(filename = nc_in_file)
@@ -230,8 +227,6 @@ read_cdf_header <- function(nc_in_file,
 #' @param nc_header header data, read in from either meta file or data in
 #'        netcdf file
 #' @param subset list object defining which subset of the data to be read
-#' @param silent whether to suppress the info "reading file XYZ"
-#'        (default TRUE)
 #'
 #' @return array with netcdf's data, dim=c(nlon,nlat,bands,steps (months/days),years)
 #'
@@ -240,22 +235,13 @@ read_cdf_header <- function(nc_in_file,
 #'
 #' }
 #'
-#' @export
 read_cdf <- function(
-    nc_in_file,
-    nc_header,
-    subset = list(),
-    silent = TRUE) {
+  nc_in_file,
+  nc_header,
+  subset = list()
+) {
   var <- nc_header$variable
   file_nc <- ncdf4::nc_open(filename = nc_in_file)
-  if (!silent) {
-    print(paste0("Reading in: ", nc_in_file))
-    print(paste0(
-      "Attempting to read variable: ", var,
-      ". If this is not correct,",
-      " please specify manually via argument var."
-    ))
-  }
 
   # Determine all years in the file
   years_raw <- seq(
