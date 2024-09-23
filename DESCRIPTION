@@ -43,7 +43,8 @@ Imports:
     withr,
     grDevices,
     cli,
-    stringi
+    stringi,
+    ncdf4
 Suggests:
     rmarkdown,
     knitr,

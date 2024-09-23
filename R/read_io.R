@@ -477,6 +477,8 @@ read_io_metadata_raw <- function(filename, file_type, band_names,
 
 # Read & assign metadata for netcdf file
 read_io_metadata_cdf <- function(filename, ...) {
+
+  args <- list(...)
   # Read file_header
   meta_data <- read_cdf_meta(filename)
   file_header <- meta_data$as_header()
@@ -496,9 +498,11 @@ read_io_metadata_cdf <- function(filename, ...) {
     additional_attributes[which(!sapply(additional_attributes, is.null))] # nolint
   # Use header name as a substitute for variable if variable is not set. Here,
   # use name argument if supplied by user.
-  if (is.null(additional_attributes[["variable"]])) {
+  if (is.null(additional_attributes[["variable"]]) &&
+      !is.null(args[["name"]])
+  ) {
     additional_attributes[["variable"]] <- as.character(
-      unname(default(name, get_header_item(file_header, "name"))[1])
+      unname(default(args[["name"]], get_header_item(file_header, "name"))[1])
     )
   }
   meta_data

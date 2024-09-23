@@ -69,7 +69,13 @@ get_timestep <- function(file_nc) {
     stop("Automatic detection of firstyear and time resolution failed.")
   }
 
-  return(list(time_res = time_res, first_year = as.numeric(first_year), timestep = timestep))
+  return(
+    list(
+      time_res = time_res,
+      first_year = as.numeric(first_year),
+      timestep = timestep
+    )
+  )
 }
 
 # utility function to guess the main variable of a netcdf file
@@ -101,15 +107,11 @@ get_main_variable <- function(file_nc) {
 #' - check calendar for irregularities (leapdays)?
 #'
 #' @param filename netcdf file name
-#' @param variable_name optional variable to be read, in case automatic detection does
-#'        not work as intended or several variables are stored within the file
+#' @param variable_name optional variable to be read, in case automatic
+#' detection does not work as intended or several variables are stored within
+#' the file
 #'
 #' @return header data
-#'
-#' @examples
-#' \dontrun{
-#'
-#' }
 #'
 read_cdf_meta <- function(
   filename,
@@ -144,9 +146,9 @@ read_cdf_meta <- function(
 
   # take the median difference between the cells as the resolution
   spatial_difference_lon <- lon[2:length(lon)] - lon[1:(length(lon) - 1)]
-  resolution_lon <- median(spatial_difference_lon)
+  resolution_lon <- stats::median(spatial_difference_lon)
   spatial_difference_lat <- lat[2:length(lat)] - lat[1:(length(lat) - 1)]
-  resolution_lat <- median(spatial_difference_lat)
+  resolution_lat <- stats::median(spatial_difference_lat)
 
   global_attributes <- ncdf4::ncatt_get(file_nc, 0)
   var_attributes <- ncdf4::ncatt_get(file_nc, variable_name)
@@ -171,7 +173,9 @@ read_cdf_meta <- function(
       meta_list$nyear <- length(time_values) / 365
       meta_list$nstep <- 365
       if (!all.equal(round(meta_list$nyear, 0), meta_list$nyear)) {
-        stop("Number of time records not a multiple of 365 - pls check calendar")
+        stop(
+          "Number of time records not a multiple of 365 - pls check calendar"
+        )
       }
     }
     if (meta_list$timestep == 1) {
@@ -199,20 +203,24 @@ read_cdf_meta <- function(
   meta_list$nbands <- length(bands)
   meta_list$band_names <- bands
 
-  meta_list$ncell <- nlon * nlat # changed for testing
-  meta_list$firstcell <- 0 # changed for testing
+  # Changed for testing
+  meta_list$ncell <- nlon * nlat
+  # Changed for testing
+  meta_list$firstcell <- 0
 
   meta_list$cellsize_lon <- resolution_lon
-  meta_list$cellsize_lat <- resolution_lat # can be negative if flipped in cdf
+  # Can be negative if flipped in cdf
+  meta_list$cellsize_lat <- resolution_lat
 
   meta_list$format <- file_type
   meta_list$filename <- basename(filename)
   meta_list$subset <- FALSE
   meta_list$datatype <- file_nc$var[[variable_name]]$prec
 
-  meta_list$scalar <- 1 # todo: can netcdf be scaled?
-  meta_list$order <- "cellseq" # not relevant, so keep default
-  meta_list$bigendian <- FALSE # not relevant, so keep default
+  # Can netcdf be scaled?
+  meta_list$scalar <- 1
+  meta_list$order <- "cellseq"
+  meta_list$bigendian <- FALSE
 
   ncdf4::nc_close(file_nc)
 
@@ -235,11 +243,6 @@ read_cdf_meta <- function(
 #' @param subset list object defining which subset of the data to be read
 #'
 #' @return array with netcdf's data, dim=c(nlon,nlat,bands,steps (months/days),years)
-#'
-#' @examples
-#' \dontrun{
-#'
-#' }
 #'
 read_cdf <- function(
   filename,
