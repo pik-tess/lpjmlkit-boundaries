@@ -293,10 +293,22 @@ LPJmLData <- R6::R6Class( # nolint:object_name_linter
         #   supported - too error prone
         if (!all(data_dim_names$lon == grid_dim_names$lon) ||
               !all(data_dim_names$lat == grid_dim_names$lat)) {
-          stop(
-            "Data dimensions do not match LPJmL grid dimensions. ",
-            "Please assure data and grid are consistent."
-          )
+          if (!all(data_dim_names$lat == grid_dim_names$lat) &&
+                all(data_dim_names$lat == rev(grid_dim_names$lat))) {
+            grid$.__set_data__(
+              subset_array(
+                grid$data,
+                subset_list = list(
+                  lat = rev(seq_len(dim(grid$data)[["lat"]]))
+                )
+              )
+            )
+          } else {
+            stop(
+              "Data dimensions do not match LPJmL grid dimensions. ",
+              "Please assure data and grid are consistent."
+            )
+          }
         }
 
         # get LPJmL grid cells from grid data
