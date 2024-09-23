@@ -310,14 +310,14 @@ read_cdf <- function(
   lat <- file_nc$dim[[latdim]]$vals
   nlon <- length(lon)
   nlat <- length(lat)
-
-  if (length(dim_names) > 2) {
+  
+  if (length(dim_names) > 3) {
     outdata <- array(
       NA,
       dim = c(
         lon = nlon,
         lat = nlat,
-        time = length(timesteps),
+        time = length(timesteps)*default(nc_header$nstep, 1),
         band = nbands
       ),
       dimnames = list(
@@ -351,7 +351,47 @@ read_cdf <- function(
       time_idx <- time_idx + 1
     }
 
-  } else if (length(dim_names) == 2) {
+  } else if (length(dim_names) == 3) {
+    outdata <- array(
+      NA,
+      dim = c(
+        lon = nlon,
+        lat = nlat,
+        time = length(timesteps)*default(nc_header$nstep, 1),
+        band = nbands
+      ),
+      dimnames = list(
+        lon = lon,
+        lat = lat,
+        time = create_time_names(
+          nstep = default(nc_header$nstep, 1),
+          years = years
+        ),
+        band = nc_header$band_names[band_subset_ids]
+      )
+    )
+    
+    time_idx <- 1
+    for (i_time in timesteps) {
+      if (nc_header$nbands == 1) {
+        data <- ncdf4::ncvar_get(
+          nc = file_nc, varid = variable_name, count = c(-1, -1, 1),
+          start = c(1, 1, i_time)
+        )
+        outdata[, , time_idx, 1] <- data
+      } else {
+        data <- ncdf4::ncvar_get(
+          nc = file_nc,
+          varid = variable_name,
+          count = c(-1, -1, -1, 1),
+          start = c(1, 1, 1, i_time)
+        )
+        outdata[, , time_idx, ] <- data[, , band_subset_ids]
+      } # end if nbands == 1
+      time_idx <- time_idx + 1
+    }
+    
+  }else if (length(dim_names) == 2) {
 
     outdata <- array(
       NA,
