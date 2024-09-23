@@ -1,6 +1,7 @@
-#' Read an LPJmL meta file or binary file header
+#' Read an LPJmL meta file, NetCDF or binary file header
 #'
-#' Reads a meta JSON file or the header of a binary LPJmL input or output file.
+#' Reads the meta information of an LPJmL Meta (JSON) file, a NetCDF file or
+#' the header of a binary LPJmL input or output file.
 #'
 #' @param filename Character string representing path
 #'   (if different from current working directory) and filename.
@@ -39,7 +40,7 @@ read_meta <- function(filename, ...) {
     meta_object <- jsonlite::read_json(path = filename, simplify = TRUE) %>%
       LPJmLMetaData$new(data_dir = pathname)
 
-  # Handling of input or output file containing a header
+    # Handling of input or output file containing a header
   } else if (file_type == "clm") {
     header <- read_header(filename, ...)
     additional_attributes <- list(
@@ -53,7 +54,11 @@ read_meta <- function(filename, ...) {
       data_dir = pathname
     )
 
-  # Other formats are not supported yet
+    # Handling of CDF files
+  } else if (file_type == "cdf") {
+    meta_object <- read_cdf_meta(filename, ...)
+
+    # Other formats are not supported yet
   } else {
     stop("Non readable (meta) file format.")
   }

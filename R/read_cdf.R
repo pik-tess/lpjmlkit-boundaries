@@ -111,9 +111,10 @@ get_main_variable <- function(file_nc) {
 #'
 #' }
 #'
-#' @export
-read_cdf_header <- function(filename,
-                            variable_name = NULL) {
+read_cdf_meta <- function(
+  filename,
+  variable_name = NULL
+) {
   file_type <- lpjmlkit::detect_io_type(filename = filename)
 
   file_nc <- ncdf4::nc_open(filename = filename)
@@ -215,11 +216,11 @@ read_cdf_header <- function(filename,
 
   ncdf4::nc_close(file_nc)
 
-  header_data <- lpjmlkit::LPJmLMetaData$new(
+  meta_data <- lpjmlkit::LPJmLMetaData$new(
     x = meta_list,
     data_dir = dirname(filename)
   )
-  header_data
+  meta_data
 }
 
 #' Reads netcdf and returns it as array
@@ -249,25 +250,44 @@ read_cdf <- function(
   file_nc <- ncdf4::nc_open(filename = filename)
 
   # Determine all years in the file
-  years_raw <- seq(
+  years_only <- seq(
     from       = default(nc_header$firstyear, 1901),
-    by         = default(nc_header$timestep, 1),
     length.out = default(nc_header$nyear, 1)
   )
-  # Years to read
-  if ("year" %in% names(subset)) {
-    if (is.numeric(subset[["year"]])) {
-      years <- years_raw[subset[["year"]]]
-    } else {
-      years <- as.integer(subset[["year"]])
+  # Determine all years in the file
+  years_timesteps <- rep(
+    years_only,
+    default(nc_header$timestep, 1)
+  )
+
+  if (!is.null(names(subset))) {
+    if (any(c("lon", "lat", "coords", "coordinates") %in% names(subset))) {
+      stop("Subsetting by lon/lat not supported for reading NetCDF files.")
     }
-  } else {
-    years <- years_raw
+
+    if (!all(names(subset) %in% c("lon", "lat", "year", "band"))) {
+      stop(
+        "Subset must be a list with elements of the array dimensions ",
+        "'lon', 'lat', 'year', 'band'."
+      )
+    }
   }
-  ntimesteps <- nc_header$nyear * nc_header$nstep
+
+  # Years to read
+  if (!is.null(names(subset)) && "year" %in% names(subset)) {
+    if (is.numeric(subset[["year"]])) {
+      subset[["year"]] <- years_only[subset[["year"]]]
+    }
+    timesteps <- which(years_timesteps %in% subset[["year"]])
+    years <- years_timesteps[timesteps]
+
+  } else {
+    timesteps <- seq_along(years_timesteps)
+    years <- years_timesteps
+  }
 
   # bands to read
-  if ("band" %in% names(subset)) {
+  if (!is.null(names(subset)) && "band" %in% names(subset)) {
     if (nc_header$nbands == 1) stop("Can't extract bands from single band input.")
     if (is.numeric(subset[["band"]])) {
       band_subset_ids <- subset[["band"]]
@@ -292,20 +312,30 @@ read_cdf <- function(
     outdata <- array(
       NA,
       dim = c(
-        nlon,
-        nlat,
-        ntimesteps,
-        nbands
+        lon = nlon,
+        lat = nlat,
+        time = length(timesteps),
+        band = nbands
+      ),
+      dimnames = list(
+        lon = lon,
+        lat = lat,
+        time = create_time_names(
+          nstep = default(nc_header$nstep, 1),
+          years = years
+        ),
+        band = nc_header$band_names[band_subset_ids]
       )
     )
 
-    for (i_time in ntimesteps) {
+    time_idx <- 1
+    for (i_time in timesteps) {
       if (nc_header$nbands == 1) {
         data <- ncdf4::ncvar_get(
           nc = file_nc, varid = variable_name, count = c(-1, -1, 1),
           start = c(1, 1, i_time)
         )
-        outdata[, , i_time, 1] <- data
+        outdata[, , time_idx, 1] <- data
       } else {
         data <- ncdf4::ncvar_get(
           nc = file_nc,
@@ -313,33 +343,24 @@ read_cdf <- function(
           count = c(-1, -1, -1, 1),
           start = c(1, 1, 1, i_time)
         )
-        outdata[, , i_time, ] <- data[, , band_subset_ids]
+        outdata[, , time_idx, ] <- data[, , band_subset_ids]
       } # end if nbands == 1
+      time_idx <- time_idx + 1
     }
 
-    dim(outdata) <- c(
-      lon = nlon,
-      lat = nlat,
-      time = ntimesteps,
-      band = nbands
-    )
-    dimnames(outdata) <- list(
-      lon = lon,
-      lat = lat,
-      time = create_time_names(
-        nstep = default(nc_header$nstep, 1),
-        years = years
-      ),
-      band = nc_header$band_names[band_subset_ids]
-    )
-
   } else if (length(dim_names) == 2) {
+
     outdata <- array(
       NA,
       dim = c(
-        nlon,
-        nlat,
-        nbands
+        lon = nlon,
+        lat = nlat,
+        band = nbands
+      ),
+      dimnames = list(
+        lon = lon,
+        lat = lat,
+        band = nc_header$band_names[band_subset_ids]
       )
     )
 
@@ -358,17 +379,6 @@ read_cdf <- function(
       )
       outdata[, , ] <- data[, , band_subset_ids]
     } # end if nbands == 1
-
-    dim(outdata) <- c(
-      lon = nlon,
-      lat = nlat,
-      band = nbands
-    )
-    dimnames(outdata) <- list(
-      lon = lon,
-      lat = lat,
-      band = nc_header$band_names[band_subset_ids]
-    )
 
   } else {
     stop("No spatial information found in netcdf file.")

@@ -406,8 +406,10 @@ read_io <- function( # nolint:cyclocomp_linter.
     }
     
     # todo: directly create LPJmLData object from lat-lon
-    latlon_data <- LPJmLData$new(data = file_data,
-                                meta_data = meta_data)
+    latlon_data <- LPJmLData$new(
+      data = file_data,
+      meta_data = meta_data
+    )
     
     latlon_data
   }# end if !cdf
@@ -474,10 +476,9 @@ read_io_metadata_raw <- function(filename, file_type, band_names,
 }
 
 # Read & assign metadata for netcdf file
-# currently just a stub, and doubling read_cdf_header -> replace?
 read_io_metadata_cdf <- function(filename, ...) {
   # Read file_header
-  meta_data <- read_cdf_header(filename)
+  meta_data <- read_cdf_meta(filename)
   file_header <- meta_data$as_header()
 
   # Check validity of band_names
