@@ -43,8 +43,7 @@ Imports:
     withr,
     grDevices,
     cli,
-    stringi,
-    ncdf4
+    stringi
 Suggests:
     rmarkdown,
     knitr,
@@ -53,7 +52,8 @@ Suggests:
     raster,
     reshape2,
     maps,
-    sf
+    sf,
+    ncdf4
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Date: 2024-07-26

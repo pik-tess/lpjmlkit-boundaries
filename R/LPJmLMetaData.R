@@ -94,6 +94,8 @@ LPJmLMetaData <- R6::R6Class( # nolint
                    if (is.character(x)) {
                      # Quotes only around each element, not around vector
                      return(noquote(paste(dQuote(x), collapse = " ")))
+                   } else if (is.list(x) && !is.null(x[["filename"]])) {
+                     return(noquote(paste(dQuote(x[["filename"]]), collapse = " ")))
                    } else {
                      # No quotes for numeric vectors
                      return(noquote(paste(x, collapse = " ")))
@@ -536,6 +538,17 @@ LPJmLMetaData <- R6::R6Class( # nolint
       return(private$.version)
     },
 
+    grid = function(...) {
+      check_change(self, "grid", ...)
+      return(private$.grid)
+    },
+
+
+    ref_area = function(...) {
+      check_change(self, "ref_area", ...)
+      return(private$.ref_area)
+    },
+
     #' @field ._data_dir_ *Internal* character string containing the directory
     #'   from which the file was loaded.
     ._data_dir_ = function(...) {
@@ -584,7 +597,6 @@ LPJmLMetaData <- R6::R6Class( # nolint
     init_list = function(x, additional_attributes = list()) {
 
       for (name_id in private$.name_order) {
-
         if (is.null(x[[name_id]])) {
           if (name_id %in% names(additional_attributes)) {
             x[[name_id]] <- additional_attributes[[name_id]]
@@ -623,7 +635,9 @@ LPJmLMetaData <- R6::R6Class( # nolint
         "order",
         "history",
         "source",
-        "filename"
+        "filename",
+        "grid",
+        "ref_area"
       ) %>%
 
         # Only append scalar if != 1
@@ -695,6 +709,10 @@ LPJmLMetaData <- R6::R6Class( # nolint
 
     .map = NULL,
 
+    .grid = NULL,
+
+    .ref_area = NULL,
+
     .subset = FALSE,
 
     .subset_space = FALSE,
@@ -730,6 +748,8 @@ LPJmLMetaData <- R6::R6Class( # nolint
                     "bigendian",
                     "format",
                     "filename",
+                    "grid",
+                    "ref_area",
                     "name",
                     "map",
                     "version",
