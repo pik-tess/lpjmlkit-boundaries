@@ -203,7 +203,15 @@ read_io <- function( # nolint:cyclocomp_linter.
   }
 
   # Check valid dim_order
-  valid_dim_names <- c("cell", "time", "band")
+  if (file_type == "cdf") {
+    valid_dim_names <- c("lat", "lon", "time", "band")
+    if (all(dim_order == c("cell", "time", "band"))) {
+      dim_order <- c("lat", "lon", "time", "band")
+    }
+  } else {
+    valid_dim_names <- c("cell", "time", "band")
+  }
+
   if (!all(dim_order %in% valid_dim_names)) {
     stop(
       "Invalid dim_order provided: c(",
@@ -320,7 +328,7 @@ read_io <- function( # nolint:cyclocomp_linter.
   # warnings should have been triggered in read_io_metadata already.
   file_header <- meta_data$as_header(silent = TRUE)
 
-  if (!meta_data$format == "cdf") {
+  if (meta_data$format != "cdf") {
     # Check file size
     # Check if file is an LPJDAMS input file, which has a different format.
     if (get_header_item(file_header, "name") == "LPJDAMS") {
@@ -389,31 +397,30 @@ read_io <- function( # nolint:cyclocomp_linter.
     # Adjust dimension order to dim_order
     if (!identical(dim_order, names(dim(file_data))))
       file_data <- aperm(file_data, perm = dim_order)
-    
+
     # Create LPJmLData object and combine data and meta_data
     lpjml_data <- LPJmLData$new(data = file_data,
                                 meta_data = meta_data)
     rm(file_data, meta_data)
     lpjml_data
-    
+
   } else {
-    
+
     file_data <- read_cdf(filename, meta_data, subset)
 
     # update meta data according to subset
     if (length(subset) > 0) {
       meta_data$.__update_subset__(subset)
     }
-    
+
     # todo: directly create LPJmLData object from lat-lon
     latlon_data <- LPJmLData$new(
       data = file_data,
       meta_data = meta_data
     )
-    
-    latlon_data
-  }# end if !cdf
 
+    latlon_data
+  }
 }
 
 # Read & assign metadata for binary file without a header

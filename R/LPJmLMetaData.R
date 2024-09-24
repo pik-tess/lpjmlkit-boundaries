@@ -538,12 +538,15 @@ LPJmLMetaData <- R6::R6Class( # nolint
       return(private$.version)
     },
 
+    #' @field grid List including information on the filename and type of the
+    #' corresponding grid file.
     grid = function(...) {
       check_change(self, "grid", ...)
       return(private$.grid)
     },
 
-
+    #' @field ref_area List including information on the reference_area filename and type
+    #' of the data.
     ref_area = function(...) {
       check_change(self, "ref_area", ...)
       return(private$.ref_area)

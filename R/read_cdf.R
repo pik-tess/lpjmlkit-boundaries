@@ -260,7 +260,7 @@ read_cdf <- function(
   # Determine all years in the file
   years_timesteps <- rep(
     years_only,
-    default(nc_header$timestep, 1)
+    each = default(nc_header$nstep, 1)
   )
 
   if (!is.null(names(subset))) {
@@ -268,7 +268,7 @@ read_cdf <- function(
       stop("Subsetting by lon/lat not supported for reading NetCDF files.")
     }
 
-    if (!all(names(subset) %in% c("lon", "lat", "year", "band"))) {
+    if (!all(names(subset) %in% c("year", "band"))) {
       stop(
         "Subset must be a list with elements of the array dimensions ",
         "'lon', 'lat', 'year', 'band'."
