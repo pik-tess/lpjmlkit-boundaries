@@ -73,7 +73,14 @@ LPJmLData <- R6::R6Class( # nolint:object_name_linter
       } else {
         # All arguments have to be provided manually to read_io.
         #   Ellipsis (...) does that.
-        lpjml_data <- read_io(...)
+        if (private$.meta$._subset_space_) {
+          lpjml_data <- read_io(
+            ...,
+            subset = list(cell = self$dimnames()[["cell"]])
+          )
+        } else {
+          lpjml_data <- read_io(...)
+        }
       }
       # Create LPJmLData object and bring together data and meta_data
       lpjml_grid <- LPJmLGridData$new(lpjml_data)
@@ -324,14 +331,6 @@ LPJmLData <- R6::R6Class( # nolint:object_name_linter
           subset = list(cell = cell_dimnames),
           cell_dimnames = cell_dimnames
         )
-
-      } else if (private$.meta$._space_format_ == "cell") {
-
-        # Add support for cell subsets. This is a rough filter since $subset
-        #   does not say if cell is subsetted - but ok for now.
-        if (self$meta$._subset_space_) {
-          grid$subset(cell = self$dimnames()[["cell"]])
-        }
       }
 
       # Set grid attribute
