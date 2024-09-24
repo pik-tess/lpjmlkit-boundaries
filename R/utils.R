@@ -202,3 +202,36 @@ check_change <- function(self, att, ...) {
     )
   }
 }
+
+
+
+# check and if required transpose latitude and longitude of array
+# LPJmL grid starts with 90°N and 180°W
+transpose_lon_lat <- function(x) {
+
+  # check for correct order of longitudes (180°W to 180°E: - to +)
+  if (mean(diff(as.numeric(dimnames(x)[["lon"]]))) < 0) {
+    x <- subset_array(
+      x,
+      subset_list = list(
+        lon = rev(seq_len(dim(x)[["lon"]]))
+      ),
+      drop = FALSE
+    )
+  } else {
+    x
+  }
+
+  # check for correct order of latitudes (90°N to 90°S: + to -)
+  if (mean(diff(as.numeric(dimnames(x)[["lat"]]))) > 0) {
+    x <- subset_array(
+      x,
+      subset_list = list(
+        lat = rev(seq_len(dim(x)[["lat"]]))
+      ),
+      drop = FALSE
+    )
+  }
+
+  x
+}

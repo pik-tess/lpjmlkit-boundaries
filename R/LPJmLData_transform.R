@@ -130,11 +130,13 @@ LPJmLData$set(
           to == "lon_lat") {
 
       private$.grid$transform(to = to)
-
       # Matrix with ilon and ilat indices of cells in new array
       ilonilat <- arrayInd(
-        match(as.integer(dimnames(self)[["cell"]]), private$.grid$data),
-        dim(private$.grid)
+        match(
+          as.integer(dimnames(self)[["cell"]]),
+          drop_omit(private$.grid$data, c("lon", "lat"))
+        ),
+        dim(private$.grid)[c("lon", "lat")]
       )
       dimnames(ilonilat) <- list(cell = dimnames(self)[["cell"]],
                                  band = c("lon", "lat"))
@@ -192,8 +194,13 @@ LPJmLData$set(
     } else if (private$.meta$._space_format_ == "lon_lat" && to == "cell") {
 
       # Matrix with ilon and ilat indices of cells in new array
-      ilonilat <- arrayInd(match(sort(private$.grid$data), private$.grid$data),
-                           dim(private$.grid))
+      ilonilat <- arrayInd(
+        match(
+          sort(private$.grid$data),
+          drop_omit(private$.grid$data, c("lon", "lat"))
+        ),
+        dim(private$.grid)[c("lon", "lat")]
+      )
 
       dimnames(ilonilat) <- list(cell = format(sort(private$.grid$data),
                                                trim = TRUE, scientific = FALSE),

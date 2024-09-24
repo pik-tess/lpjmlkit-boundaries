@@ -310,14 +310,15 @@ read_cdf <- function(
   lat <- file_nc$dim[[latdim]]$vals
   nlon <- length(lon)
   nlat <- length(lat)
-  
+  time_idx <- 1
+
   if (length(dim_names) > 3) {
     outdata <- array(
       NA,
       dim = c(
         lon = nlon,
         lat = nlat,
-        time = length(timesteps)*default(nc_header$nstep, 1),
+        time = length(timesteps) * default(nc_header$nstep, 1),
         band = nbands
       ),
       dimnames = list(
@@ -331,7 +332,6 @@ read_cdf <- function(
       )
     )
 
-    time_idx <- 1
     for (i_time in timesteps) {
       if (nc_header$nbands == 1) {
         data <- ncdf4::ncvar_get(
@@ -357,7 +357,7 @@ read_cdf <- function(
       dim = c(
         lon = nlon,
         lat = nlat,
-        time = length(timesteps)*default(nc_header$nstep, 1),
+        time = length(timesteps) * default(nc_header$nstep, 1),
         band = nbands
       ),
       dimnames = list(
@@ -370,8 +370,7 @@ read_cdf <- function(
         band = nc_header$band_names[band_subset_ids]
       )
     )
-    
-    time_idx <- 1
+
     for (i_time in timesteps) {
       if (nc_header$nbands == 1) {
         data <- ncdf4::ncvar_get(
@@ -390,7 +389,7 @@ read_cdf <- function(
       } # end if nbands == 1
       time_idx <- time_idx + 1
     }
-    
+
   }else if (length(dim_names) == 2) {
 
     outdata <- array(
@@ -426,6 +425,10 @@ read_cdf <- function(
   } else {
     stop("No spatial information found in netcdf file.")
   }
+
+  # check if the data is in correct (LPJmL) lon and lat order: if not, transpose
+  outdata <- transpose_lon_lat(outdata)
+
   ncdf4::nc_close(file_nc)
 
   return(outdata)
