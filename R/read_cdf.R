@@ -258,7 +258,7 @@ read_cdf <- function(
     length.out = default(nc_header$nyear, 1)
   )
   # Determine all years in the file
-  years_timesteps <- rep(
+  years_nstep <- rep(
     years_only,
     each = default(nc_header$nstep, 1)
   )
@@ -281,12 +281,12 @@ read_cdf <- function(
     if (is.numeric(subset[["year"]])) {
       subset[["year"]] <- years_only[subset[["year"]]]
     }
-    timesteps <- which(years_timesteps %in% subset[["year"]])
-    years <- years_timesteps[timesteps]
+    timesteps <- which(years_nstep %in% subset[["year"]])
+    years <- years_nstep[timesteps]
 
   } else {
-    timesteps <- seq_along(years_timesteps)
-    years <- years_timesteps
+    timesteps <- seq_along(years_nstep)
+    years <- years_nstep
   }
 
   # bands to read
