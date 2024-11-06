@@ -1,72 +1,52 @@
 # utility function to determine time resolution of a netcdf file
 get_timestep <- function(file_nc) {
   tunit <- file_nc$dim$time$units
-
   if (is.null(tunit)) {
     return(NULL)
   }
-
   time_values <- file_nc$dim$time$vals
   # default
   timestep <- 1
-
-  if (grepl("years since", tunit, ignore.case = TRUE)) {
-    time_res <- "annual"
-    base_year <- as.integer(
-      unlist(
-        strsplit(
-          unlist(
-            strsplit(
-              tunit,
-              split = " ",
-              fixed = TRUE
-            )
-          )[3],
-          split = "-",
-          fixed = TRUE
-        )
-      )[1]
+  
+  if (grepl("[[:digit:]]", tunit)) {
+    time_cf <- CFtime::CFtime(definition = tunit, 
+                              calendar = file_nc$dim$time$calendar#,
+                              #offsets currently don't work with LPJmL outputs (negative)
+                              #offsets = ncdf4::ncvar_get(nc = file_nc,varid = "time") 
     )
-    offset_year <- time_values[1]
-    first_year <- base_year + offset_year
-
-  } else if (grepl("year", tunit, ignore.case = TRUE)) {
-    time_res <- "annual"
-    first_year <- time_values[1]
-    timestep <- time_values[2] - time_values[1]
-
-  } else if (grepl("days since", tunit, fixed = TRUE)) {
-    ddiff <- time_values[2] - time_values[1]
-    base_year <- as.integer(
-      unlist(
-        strsplit(
-          unlist(
-            strsplit(
-              tunit,
-              split = " ",
-              fixed = TRUE
-            )
-          )[3],
-          split = "-",
-          fixed = TRUE
-        )
-      )[1]
-    )
-
-    offset_year <- floor(time_values[1] / 365)
-    first_year <- base_year + offset_year
-
-    if (ddiff > 27 && ddiff < 32) {
-      time_res <- "monthly"
-    } else if (ddiff > 364 && ddiff < 367) {
+    
+    if (CFtime::unit(time_cf) == "years") {
       time_res <- "annual"
-    } else if (ddiff == 1) {
-      time_res <- "daily"
+      base_year <- time_cf@datum@origin$year
+      offset_year <- time_values[1]
+      first_year <- base_year + offset_year
+    } else if (CFtime::unit(time_cf) == "days") {
+      ddiff <- time_values[2] - time_values[1]
+      base_year <- time_cf@datum@origin$year
+      offset_year <- floor(time_values[1] / 365)
+      first_year <- base_year + offset_year
+      
+      if (ddiff > 27 && ddiff < 32) {
+        time_res <- "monthly"
+      } else if (ddiff > 364 && ddiff < 367) {
+        time_res <- "annual"
+      } else if (ddiff == 1) {
+        time_res <- "daily"
+      } else {
+        stop("Automatic detection of firstyear and time resolution failed.")
+      }
     } else {
       stop("Automatic detection of firstyear and time resolution failed.")
     }
+    
   } else {
-    stop("Automatic detection of firstyear and time resolution failed.")
+    if (grepl("year", tunit, ignore.case = TRUE)) {
+      time_res <- "annual"
+      first_year <- time_values[1]
+      timestep <- time_values[2] - time_values[1]
+    } else {
+      stop("Automatic detection of firstyear and time resolution failed.")
+    }
   }
 
   return(
@@ -103,8 +83,6 @@ get_main_variable <- function(file_nc) {
 #' Reads netcdf and returns it header info
 #'
 #' Reads an arbitrary netcdf + returns the header values to read as lpjml object
-#' Todos:
-#' - check calendar for irregularities (leapdays)?
 #'
 #' @param filename netcdf file name
 #' @param variable_name optional variable to be read, in case automatic
@@ -156,6 +134,11 @@ read_cdf_meta <- function(
   meta_list <- list()
 
   time_values <- file_nc$dim$time$vals
+  if (grepl("[[:digit:]]", file_nc$dim$time$units)) {
+    time_cf <- CFtime::CFtime(definition = file_nc$dim$time$units, 
+                              calendar = file_nc$dim$time$calendar)
+  }
+
   time_info <- get_timestep(file_nc = file_nc)
 
   if (!is.null(time_info)) {
@@ -170,19 +153,21 @@ read_cdf_meta <- function(
       meta_list$nyear <- length(time_values) / 12
       meta_list$nstep <- 12
     } else if (time_res == "daily") {
-      meta_list$nyear <- length(time_values) / 365
-      meta_list$nstep <- 365
+      # todo: here we need to know the specific years (offset) 
+      #       to determine the exact number of days
+      days_per_year <- sum(CFtime::month_days(time_cf)) 
+      meta_list$nyear <- length(time_values) / days_per_year
+      meta_list$nstep <- days_per_year
       if (!all.equal(round(meta_list$nyear, 0), meta_list$nyear)) {
         stop(
           "Number of time records not a multiple of 365 - pls check calendar"
         )
       }
     }
-    if (meta_list$timestep == 1) {
-      meta_list$lastyear <- meta_list$first_year + meta_list$nyear - 1
-    } else {
-      meta_list$lastyear <- time_values[length(time_values)]
-    }
+    
+    meta_list$lastyear <- meta_list$firstyear + 
+                                     (meta_list$nyear - 1) * meta_list$timestep
+
   } else if (!variable_name %in% c("cellid", "grid", "LPJGRID")) {
     stop("Time information could not be extracted from the netcdf file.")
   } else {
@@ -209,7 +194,7 @@ read_cdf_meta <- function(
   meta_list$firstcell <- 0
 
   meta_list$cellsize_lon <- resolution_lon
-  # Can be negative if flipped in cdf
+  # Can be negative if flipped in cdf -> will be treated afterwards and reset
   meta_list$cellsize_lat <- resolution_lat
 
   meta_list$format <- file_type
@@ -217,7 +202,6 @@ read_cdf_meta <- function(
   meta_list$subset <- FALSE
   meta_list$datatype <- file_nc$var[[variable_name]]$prec
 
-  # Can netcdf be scaled?
   meta_list$scalar <- 1
   meta_list$order <- "cellseq"
   meta_list$bigendian <- FALSE
@@ -255,6 +239,7 @@ read_cdf <- function(
   # Determine all years in the file
   years_only <- seq(
     from       = default(nc_header$firstyear, 1901),
+    by = default(nc_header$timestep, 1),
     length.out = default(nc_header$nyear, 1)
   )
   # Determine all years in the file
@@ -318,7 +303,7 @@ read_cdf <- function(
       dim = c(
         lon = nlon,
         lat = nlat,
-        time = length(timesteps) * default(nc_header$nstep, 1),
+        time = length(timesteps),
         band = nbands
       ),
       dimnames = list(
@@ -326,7 +311,7 @@ read_cdf <- function(
         lat = lat,
         time = create_time_names(
           nstep = default(nc_header$nstep, 1),
-          years = years
+          years = unique(years)
         ),
         band = nc_header$band_names[band_subset_ids]
       )
@@ -352,12 +337,13 @@ read_cdf <- function(
     }
 
   } else if (length(dim_names) == 3) {
+
     outdata <- array(
       NA,
       dim = c(
         lon = nlon,
         lat = nlat,
-        time = length(timesteps) * default(nc_header$nstep, 1),
+        time = length(timesteps),
         band = nbands
       ),
       dimnames = list(
@@ -365,7 +351,7 @@ read_cdf <- function(
         lat = lat,
         time = create_time_names(
           nstep = default(nc_header$nstep, 1),
-          years = years
+          years = unique(years)
         ),
         band = nc_header$band_names[band_subset_ids]
       )
