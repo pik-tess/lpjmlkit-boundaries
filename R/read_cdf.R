@@ -134,14 +134,13 @@ read_cdf_meta <- function(
   meta_list <- list()
 
   time_values <- file_nc$dim$time$vals
-  if (grepl("[[:digit:]]", file_nc$dim$time$units)) {
-    time_cf <- CFtime::CFtime(definition = file_nc$dim$time$units, 
-                              calendar = file_nc$dim$time$calendar)
-  }
-
   time_info <- get_timestep(file_nc = file_nc)
 
   if (!is.null(time_info)) {
+    if (grepl("[[:digit:]]", file_nc$dim$time$units)) {
+      time_cf <- CFtime::CFtime(definition = file_nc$dim$time$units, 
+                                calendar = file_nc$dim$time$calendar)
+    }
     time_res <- time_info$time_res
     meta_list$firstyear <- time_info$first_year
     meta_list$timestep <- time_info$timestep

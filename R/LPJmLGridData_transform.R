@@ -13,7 +13,7 @@ LPJmLGridData$set(
         to <- "cell"
       }
     }
-
+    
     # Case 1: Transformation from cell dimension to lon, lat dimensions
     if (private$.meta$._space_format_ == "cell" &&
           to == "lon_lat") {
@@ -25,6 +25,7 @@ LPJmLGridData$set(
         max = apply(self$data, "band", max)
       )
 
+      colnames(grid_extent) <- c("lon","lat")
 
       # Generate two-dimensional array covering the full grid_extent with
       # lon_lat dimensions using orientation as in raster objects, i.e. from
