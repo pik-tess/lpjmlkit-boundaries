@@ -155,8 +155,9 @@ read_cdf_meta <- function(
       # todo: here we need to know the specific years (offset) 
       #       to determine the exact number of days
       days_per_year <- sum(CFtime::month_days(time_cf)) 
-      meta_list$nyear <- length(time_values) / days_per_year
+      meta_list$nyear <- round(length(time_values) / days_per_year)
       meta_list$nstep <- days_per_year
+      
       if (!all.equal(round(meta_list$nyear, 0), meta_list$nyear)) {
         stop(
           "Number of time records not a multiple of 365 - pls check calendar"
