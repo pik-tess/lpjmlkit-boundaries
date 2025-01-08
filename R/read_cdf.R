@@ -20,6 +20,11 @@ get_timestep <- function(file_nc) {
       base_year <- time_cf@datum@origin$year
       offset_year <- time_values[1]
       first_year <- base_year + offset_year
+    } else if (CFtime::unit(time_cf) == "months") {
+      time_res <- "monthly"
+      base_year <- time_cf@datum@origin$year
+      offset_year <- time_values[1]
+      first_year <- base_year + offset_year
     } else if (CFtime::unit(time_cf) == "days") {
       ddiff <- time_values[2] - time_values[1]
       base_year <- time_cf@datum@origin$year
@@ -121,13 +126,25 @@ read_cdf_meta <- function(
   lat <- file_nc$dim[[latdim]]$vals
   nlon <- length(lon)
   nlat <- length(lat)
-
+  
   # take the median difference between the cells as the resolution
+  if (nlon > 1) {
   spatial_difference_lon <- lon[2:length(lon)] - lon[1:(length(lon) - 1)]
-  resolution_lon <- stats::median(spatial_difference_lon)
+  resolution_lon <- abs(stats::median(spatial_difference_lon))
+  }
+  if (nlat > 1) {
   spatial_difference_lat <- lat[2:length(lat)] - lat[1:(length(lat) - 1)]
-  resolution_lat <- stats::median(spatial_difference_lat)
-
+  resolution_lat <- abs(stats::median(spatial_difference_lat))
+  }
+  # if we have only a subset, we need to make some assumptions for the resolution
+  if (nlat == 1 & nlon == 1) {
+    resolution_lat <- 0.5
+    resolution_lon <- 0.5
+  } else if (nlat == 1 & nlon > 1) {
+    resolution_lat <- resolution_lon
+  } else if (nlat > 1 & nlon == 1) {
+    resolution_lon <- resolution_lat
+  }
   global_attributes <- ncdf4::ncatt_get(file_nc, 0)
   var_attributes <- ncdf4::ncatt_get(file_nc, variable_name)
 
@@ -139,7 +156,9 @@ read_cdf_meta <- function(
   if (!is.null(time_info)) {
     if (grepl("[[:digit:]]", file_nc$dim$time$units)) {
       time_cf <- CFtime::CFtime(definition = file_nc$dim$time$units, 
-                                calendar = file_nc$dim$time$calendar)
+                                calendar = file_nc$dim$time$calendar
+                                # todo: missing the offset here
+                                )
     }
     time_res <- time_info$time_res
     meta_list$firstyear <- time_info$first_year
@@ -154,6 +173,7 @@ read_cdf_meta <- function(
     } else if (time_res == "daily") {
       # todo: here we need to know the specific years (offset) 
       #       to determine the exact number of days
+      
       days_per_year <- sum(CFtime::month_days(time_cf)) 
       meta_list$nyear <- round(length(time_values) / days_per_year)
       meta_list$nstep <- days_per_year
@@ -297,7 +317,7 @@ read_cdf <- function(
   nlat <- length(lat)
   time_idx <- 1
 
-  if (length(dim_names) > 3) {
+  if (length(dim_names) == 4) { # lon, lat, time, band
     outdata <- array(
       NA,
       dim = c(
@@ -318,25 +338,27 @@ read_cdf <- function(
     )
 
     for (i_time in timesteps) {
-      if (nc_header$nbands == 1) {
+      if (nc_header$nbands == 1) { # can this occur at all?
         data <- ncdf4::ncvar_get(
           nc = file_nc, varid = variable_name, count = c(-1, -1, 1),
           start = c(1, 1, i_time)
         )
         outdata[, , time_idx, 1] <- data
-      } else {
+      } else { # lon, lat, time, band
+
         data <- ncdf4::ncvar_get(
           nc = file_nc,
           varid = variable_name,
           count = c(-1, -1, -1, 1),
-          start = c(1, 1, 1, i_time)
+          start = c(1, 1, 1, i_time),
+          collapse_degen = FALSE # avoid dropping of the lat dim, if lat/lon have length 1
         )
-        outdata[, , time_idx, ] <- data[, , band_subset_ids]
+        outdata[, , time_idx, ] <- data[, , band_subset_ids, 1]
       } # end if nbands == 1
       time_idx <- time_idx + 1
     }
 
-  } else if (length(dim_names) == 3) {
+  } else if (length(dim_names) == 3) { # lon, lat, time
 
     outdata <- array(
       NA,
@@ -356,15 +378,15 @@ read_cdf <- function(
         band = nc_header$band_names[band_subset_ids]
       )
     )
-
+    
     for (i_time in timesteps) {
-      if (nc_header$nbands == 1) {
+      if (nc_header$nbands == 1) { # lon, lat, time
         data <- ncdf4::ncvar_get(
           nc = file_nc, varid = variable_name, count = c(-1, -1, 1),
           start = c(1, 1, i_time)
         )
         outdata[, , time_idx, 1] <- data
-      } else {
+      } else { # can this occur at all?
         data <- ncdf4::ncvar_get(
           nc = file_nc,
           varid = variable_name,
@@ -376,28 +398,30 @@ read_cdf <- function(
       time_idx <- time_idx + 1
     }
 
-  }else if (length(dim_names) == 2) {
+  }else if (length(dim_names) == 2) { # can this occur at all?
 
     outdata <- array(
       NA,
       dim = c(
         lon = nlon,
         lat = nlat,
+        time = 1,
         band = nbands
       ),
       dimnames = list(
         lon = lon,
         lat = lat,
+        time = 1,
         band = nc_header$band_names[band_subset_ids]
       )
     )
-
+    
     if (nc_header$nbands == 1) {
       data <- ncdf4::ncvar_get(
         nc = file_nc, varid = variable_name, count = c(-1, -1),
         start = c(1, 1)
       )
-      outdata[, , 1] <- data
+      outdata[, , 1, 1] <- data
     } else {
       data <- ncdf4::ncvar_get(
         nc = file_nc,
@@ -405,7 +429,7 @@ read_cdf <- function(
         count = c(-1, -1, 1),
         start = c(1, 1, 1)
       )
-      outdata[, , ] <- data[, , band_subset_ids]
+      outdata[, ,1, ] <- data[, , band_subset_ids]
     } # end if nbands == 1
 
   } else {

@@ -1,3 +1,45 @@
+# outputs in cdf format
+test_that("read io - .nc - npp", {
+  
+  grid_file <- "../testdata/output/grid.bin.json"
+  # test reading the file
+  out_filename <- "../testdata/output/npp.nc"
+  out <- read_io(
+    filename = out_filename
+  )
+  expect_true(exists("out"))
+  expect_true("LPJmLData" %in% class(out))
+
+  # test attaching the grid and converting to LPJmL array
+  out_transformed <- out %>% lpjmlkit::transform(to = c("year_month_day")) %>%
+    lpjmlkit::add_grid(grid_file) %>%
+    lpjmlkit::transform(to = "cell") %>%
+    lpjmlkit::as_array() %>%
+    drop() 
+  expect_true(exists("out_transformed"))
+  
+  # test a banded output
+  out_filename <- "../testdata/output/pft_npp.nc"
+  out <- read_io(filename = out_filename) %>% 
+    lpjmlkit::transform(to = c("year_month_day")) %>%
+    lpjmlkit::add_grid(grid_file) %>%
+    lpjmlkit::transform(to = "cell") %>%
+    lpjmlkit::as_array() %>%
+    drop()
+  expect_true(exists("out"))
+  
+  # test a monthly output
+  out_filename <- "../testdata/output/transp.nc"
+  out <- read_io(filename = out_filename) %>% 
+    lpjmlkit::transform(to = c("year_month_day")) %>%
+    lpjmlkit::add_grid(grid_file) %>%
+    lpjmlkit::transform(to = "cell") %>%
+    lpjmlkit::as_array() %>%
+    drop() 
+  expect_true(exists("out"))
+})
+
+
 # outputs in RAW format
 test_that("read io - .bin - pft-specific & annual", {
   out_filename <- "../testdata/output/pft_npp.bin"

@@ -487,7 +487,7 @@ read_io_metadata_cdf <- function(filename, ...) {
 
   args <- list(...)
   # Read file_header
-  meta_data <- read_cdf_meta(filename)
+  meta_data <- read_cdf_meta(filename, args[["variable_name"]])
   file_header <- meta_data$as_header()
 
   # Check validity of band_names
