@@ -37,6 +37,22 @@ test_that("read io - .nc - npp", {
     lpjmlkit::as_array() %>%
     drop() 
   expect_true(exists("out"))
+
+  # test daily input
+  out_filename <- "../testdata/output/ddischarge_1901-1902.nc"
+  out <- read_io(out_filename) %>%
+    lpjmlkit::transform(to = c("year_month_day")) %>%
+    lpjmlkit::add_grid(grid_file) %>%
+    lpjmlkit::transform(to = "cell") %>%
+    lpjmlkit::as_array() %>%
+    drop()
+  expect_true(exist("out"))
+  dims <- as.integer(c(3,31,12,2))
+  names(dims) <- c("cell","day","month","year")
+  expect_identical(
+    dim(out),
+    dims
+  )
 })
 
 
