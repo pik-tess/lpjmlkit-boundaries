@@ -7,7 +7,7 @@ get_timestep <- function(file_nc) {
   time_values <- file_nc$dim$time$vals
   # default
   timestep <- 1
-  
+
   if (grepl("[[:digit:]]", tunit)) {
     time_cf <- CFtime::CFtime(definition = tunit, 
                               calendar = file_nc$dim$time$calendar#,
@@ -17,17 +17,17 @@ get_timestep <- function(file_nc) {
     
     if (CFtime::unit(time_cf) == "years") {
       time_res <- "annual"
-      base_year <- time_cf@datum@origin$year
+      base_year <- CFtime::origin(time_cf)$year
       offset_year <- time_values[1]
       first_year <- base_year + offset_year
     } else if (CFtime::unit(time_cf) == "months") {
       time_res <- "monthly"
-      base_year <- time_cf@datum@origin$year
+      base_year <- CFtime::origin(time_cf)$year
       offset_year <- time_values[1]
       first_year <- base_year + offset_year
     } else if (CFtime::unit(time_cf) == "days") {
       ddiff <- time_values[2] - time_values[1]
-      base_year <- time_cf@datum@origin$year
+      base_year <- CFtime::origin(time_cf)$year
       offset_year <- floor(time_values[1] / 365)
       first_year <- base_year + offset_year
       
