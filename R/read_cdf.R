@@ -188,9 +188,11 @@ read_cdf_meta <- function(
     meta_list$lastyear <- meta_list$firstyear + 
                                      (meta_list$nyear - 1) * meta_list$timestep
 
-  } else if (!variable_name %in% c("cellid", "grid", "LPJGRID")) {
-    stop("Time information could not be extracted from the netcdf file.")
   } else {
+    
+    if (!variable_name %in% c("cellid", "grid", "LPJGRID")) {
+      print("Time information could not be extracted from the netcdf file. Using defaults.")
+    }
     meta_list$firstyear <- 0
     meta_list$lastyear <- 0
     meta_list$nyear <- 1
