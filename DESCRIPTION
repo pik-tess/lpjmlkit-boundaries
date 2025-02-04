@@ -53,7 +53,8 @@ Suggests:
     reshape2,
     maps,
     sf,
-    ncdf4
+    ncdf4,
+    CFtime
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Date: 2025-01-27
