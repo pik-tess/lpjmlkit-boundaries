@@ -18,8 +18,4 @@ header data
 }
 \description{
 Reads an arbitrary netcdf + returns the header values to read as lpjml object
-Todos:
-\itemize{
-\item check calendar for irregularities (leapdays)?
-}
 }
