@@ -23,7 +23,7 @@ get_timestep <- function(file_nc) {
     } else if (CFtime::unit(time_cf) == "months") {
       time_res <- "monthly"
       base_year <- CFtime::origin(time_cf)$year
-      offset_year <- time_values[1]
+      offset_year <- time_values[1]/12
       first_year <- base_year + offset_year
     } else if (CFtime::unit(time_cf) == "days") {
       ddiff <- time_values[2] - time_values[1]
@@ -77,12 +77,7 @@ get_main_variable <- function(file_nc) {
       return(variable_name)
     }
   }
-  message(
-    "None of the variables could certainly be identified as main variable,",
-    "guessing the last one: ",
-    variable_name
-  )
-  return(variable_name)
+  stop("None of the variables could certainly be identified as main variable.")
 }
 
 #' Reads netcdf and returns it header info
@@ -107,25 +102,23 @@ read_cdf_meta <- function(
   if (is.null(variable_name)) variable_name <- get_main_variable(
     file_nc = file_nc
   )
-
-  # get the first of the variable names that has not been identified as the
-  # main variable
-  if (length(varnames) > 1) {
-    bands_var_name <- varnames[-match(variable_name, varnames)][1]
-    bands <- ncdf4::ncvar_get(nc = file_nc, varid = bands_var_name)
-  } else {
-    bands_var_name <- ""
-    bands <- 1
-  }
-
+  
+  ## spatial dimensions
   # get lon/lat information
-  dim_names <- names(file_nc$dim)
-  latdim <- which(grepl("lat", dim_names, ignore.case = TRUE))
-  londim <- which(grepl("lon", dim_names, ignore.case = TRUE))
+  total_dim_names <- names(file_nc$dim)
+  latdim <- which(grepl("lat", total_dim_names, ignore.case = TRUE))
+  londim <- which(grepl("lon", total_dim_names, ignore.case = TRUE))
   lon <- file_nc$dim[[londim]]$vals
   lat <- file_nc$dim[[latdim]]$vals
   nlon <- length(lon)
   nlat <- length(lat)
+  
+  # now only the main variable dimensions
+  ndims <- file_nc$var[[variable_name]]$ndims
+  dim_names <- c()
+  for (d in 1:ndims) {
+    dim_names <- append(dim_names, file_nc$var[[variable_name]]$dim[[d]]$name)
+  }
   
   # take the median difference between the cells as the resolution
   if (nlon > 1) {
@@ -137,19 +130,20 @@ read_cdf_meta <- function(
   resolution_lat <- abs(stats::median(spatial_difference_lat))
   }
   # if we have only a subset, we need to make some assumptions for the resolution
-  if (nlat == 1 & nlon == 1) {
+  if (nlat == 1 && nlon == 1) {
     resolution_lat <- 0.5
     resolution_lon <- 0.5
-  } else if (nlat == 1 & nlon > 1) {
+  } else if (nlat == 1 && nlon > 1) {
     resolution_lat <- resolution_lon
-  } else if (nlat > 1 & nlon == 1) {
+  } else if (nlat > 1 && nlon == 1) {
     resolution_lon <- resolution_lat
   }
   global_attributes <- ncdf4::ncatt_get(file_nc, 0)
   var_attributes <- ncdf4::ncatt_get(file_nc, variable_name)
 
   meta_list <- list()
-
+  
+  ## time
   time_values <- file_nc$dim$time$vals
   time_info <- get_timestep(file_nc = file_nc)
 
@@ -198,6 +192,25 @@ read_cdf_meta <- function(
     meta_list$nyear <- 1
     meta_list$nstep <- 1
     meta_list$timestep <- 1
+  }
+  
+  # get the first of the variable names that has not been identified as the
+  # main variable or one of time, lat or lon band names
+  lat_name <- dim_names[which(grepl("lat", dim_names, ignore.case = TRUE))]
+  lon_name <- dim_names[which(grepl("lon", dim_names, ignore.case = TRUE))]
+  time_name <- dim_names[which(grepl("time", dim_names, ignore.case = TRUE))]
+  
+  dimnames_reduced <- setdiff(dim_names, c(variable_name, lat_name, lon_name, time_name))
+  
+  if (length(dimnames_reduced) > 0) {
+    bands_var_name <- dimnames_reduced[1]
+    if (length(dimnames_reduced) > 1) {
+      print(paste("Several potential band dimensions detected. Picking:",bands_var_name))
+    }
+    bands <- ncdf4::ncvar_get(nc = file_nc, varid = bands_var_name)
+  } else {
+    bands_var_name <- ""
+    bands <- 1
   }
 
   meta_list$sim_name <- global_attributes$title
@@ -309,135 +322,101 @@ read_cdf <- function(
   }
   nbands <- length(band_subset_ids)
 
-  # get lon/lat information - not part of header yet
-  dim_names <- names(file_nc$dim)
-  latdim <- which(grepl("lat", dim_names, ignore.case = TRUE))
-  londim <- which(grepl("lon", dim_names, ignore.case = TRUE))
+  # get lon/lat information
+  total_dim_names <- names(file_nc$dim)
+  latdim <- which(grepl("lat", total_dim_names, ignore.case = TRUE))
+  londim <- which(grepl("lon", total_dim_names, ignore.case = TRUE))
   lon <- file_nc$dim[[londim]]$vals
   lat <- file_nc$dim[[latdim]]$vals
   nlon <- length(lon)
   nlat <- length(lat)
-  time_idx <- 1
-
-  if (length(dim_names) == 4) { # lon, lat, time, band
-    outdata <- array(
-      NA,
-      dim = c(
-        lon = nlon,
-        lat = nlat,
-        time = length(timesteps),
-        band = nbands
-      ),
-      dimnames = list(
-        lon = lon,
-        lat = lat,
-        time = create_time_names(
-          nstep = default(nc_header$nstep, 1),
-          years = unique(years)
-        ),
-        band = nc_header$band_names[band_subset_ids]
-      )
-    )
-
-    for (i_time in timesteps) {
-      if (nc_header$nbands == 1) { # can this occur at all?
-        data <- ncdf4::ncvar_get(
-          nc = file_nc, varid = variable_name, count = c(-1, -1, 1),
-          start = c(1, 1, i_time)
-        )
-        outdata[, , time_idx, 1] <- data
-      } else { # lon, lat, time, band
-
-        data <- ncdf4::ncvar_get(
-          nc = file_nc,
-          varid = variable_name,
-          count = c(-1, -1, -1, 1),
-          start = c(1, 1, 1, i_time),
-          collapse_degen = FALSE # avoid dropping of the lat dim, if lat/lon have length 1
-        )
-        outdata[, , time_idx, ] <- data[, , band_subset_ids, 1]
-      } # end if nbands == 1
-      time_idx <- time_idx + 1
-    }
-
-  } else if (length(dim_names) == 3) { # lon, lat, time
-
-    outdata <- array(
-      NA,
-      dim = c(
-        lon = nlon,
-        lat = nlat,
-        time = length(timesteps),
-        band = nbands
-      ),
-      dimnames = list(
-        lon = lon,
-        lat = lat,
-        time = create_time_names(
-          nstep = default(nc_header$nstep, 1),
-          years = unique(years)
-        ),
-        band = nc_header$band_names[band_subset_ids]
-      )
-    )
-    
-    for (i_time in timesteps) {
-      if (nc_header$nbands == 1) { # lon, lat, time
-        data <- ncdf4::ncvar_get(
-          nc = file_nc, varid = variable_name, count = c(-1, -1, 1),
-          start = c(1, 1, i_time)
-        )
-        outdata[, , time_idx, 1] <- data
-      } else { # can this occur at all?
-        data <- ncdf4::ncvar_get(
-          nc = file_nc,
-          varid = variable_name,
-          count = c(-1, -1, -1, 1),
-          start = c(1, 1, 1, i_time)
-        )
-        outdata[, , time_idx, ] <- data[, , band_subset_ids]
-      } # end if nbands == 1
-      time_idx <- time_idx + 1
-    }
-
-  }else if (length(dim_names) == 2) { # can this occur at all?
-
-    outdata <- array(
-      NA,
-      dim = c(
-        lon = nlon,
-        lat = nlat,
-        time = 1,
-        band = nbands
-      ),
-      dimnames = list(
-        lon = lon,
-        lat = lat,
-        time = 1,
-        band = nc_header$band_names[band_subset_ids]
-      )
-    )
-    
-    if (nc_header$nbands == 1) {
-      data <- ncdf4::ncvar_get(
-        nc = file_nc, varid = variable_name, count = c(-1, -1),
-        start = c(1, 1)
-      )
-      outdata[, , 1, 1] <- data
-    } else {
-      data <- ncdf4::ncvar_get(
-        nc = file_nc,
-        varid = variable_name,
-        count = c(-1, -1, 1),
-        start = c(1, 1, 1)
-      )
-      outdata[, ,1, ] <- data[, , band_subset_ids]
-    } # end if nbands == 1
-
-  } else {
-    stop("No spatial information found in netcdf file.")
+  
+  # now only the main variable dimensions
+  ndims <- file_nc$var[[variable_name]]$ndims
+  dim_names <- c()
+  for (d in 1:ndims) {
+    dim_names <- append(dim_names, file_nc$var[[variable_name]]$dim[[d]]$name)
   }
 
+
+
+  # create empty data array to fill in next step
+  outdata <- array(
+    NA,
+    dim = c(
+      lon = nlon,
+      lat = nlat,
+      time = length(timesteps),
+      band = nbands
+    ),
+    dimnames = list(
+      lon = lon,
+      lat = lat,
+      time = create_time_names(
+        nstep = default(nc_header$nstep, 1),
+        years = unique(years)
+      ),
+      band = nc_header$band_names[band_subset_ids]
+    )
+  )
+  
+  time_idx <- 1
+  for (i_time in timesteps) {
+    band_idx <- 1
+    for (i_band in band_subset_ids) {
+      
+      if (length(dim_names) == 4) { # lon, lat, time, band
+        
+        outdata[, , time_idx, band_idx] <- 
+          ncdf4::ncvar_get(
+            nc = file_nc,
+            varid = variable_name,
+            count = c(-1, -1, 1, 1),
+            start = c(1, 1, i_band, i_time),
+            collapse_degen = FALSE # avoid dropping of the lat dim, if len=1
+          )[,,1,1] # drop band and time
+        
+      } else if (length(dim_names) == 3) { # time, lon, lat or bands, lon, lat
+        
+        if (nbands == 1 && length(timesteps) > 1) { # lon, lat, time 
+          outdata[, , time_idx, band_idx] <- 
+            ncdf4::ncvar_get(
+              nc = file_nc, varid = variable_name, 
+              count = c(-1, -1, 1),
+              start = c(1, 1, i_time),
+              collapse_degen = FALSE
+            )[,,1] # drop time
+        } else if (nbands > 1 && length(timesteps) == 1) { # lat, lon, band
+          outdata[, , time_idx, band_idx] <- 
+            ncdf4::ncvar_get(
+              nc = file_nc,
+              varid = variable_name,
+              count = c(-1, -1, 1),
+              start = c(1, 1, i_band),
+              collapse_degen = FALSE
+            )[,,1] # drop band
+        } else {
+          stop("Dimensions don't add up.")
+        }# end if nbands == 1
+        
+      }else if (length(dim_names) == 2) {
+        
+        outdata[, , time_idx, band_idx] <- 
+          ncdf4::ncvar_get(
+            nc = file_nc, varid = variable_name, 
+            count = c(-1, -1),
+            start = c(1, 1),
+            collapse_degen = FALSE # avoid dropping of the lat dim, if len=1
+          ) # don't drop anything
+        
+      } else {
+        
+        stop("Less than 2 spatial dimensions in data array information found in netcdf file.")
+      }
+      band_idx <- band_idx + 1
+    }
+    time_idx <- time_idx + 1
+  }
   # check if the data is in correct (LPJmL) lon and lat order: if not, transpose
   outdata <- transpose_lon_lat(outdata)
 
