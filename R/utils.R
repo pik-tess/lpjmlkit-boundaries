@@ -203,10 +203,7 @@ check_change <- function(self, att, ...) {
   }
 }
 
-
-
-# check and if required transpose latitude and longitude of array
-# LPJmL grid starts with 90°N and 180°W
+# check and if required transpose longitude and/or latitude axis
 transpose_lon_lat <- function(x) {
   if (length(dimnames(x)[["lon"]]) > 1) {
     # check for correct order of longitudes (180°W to 180°E: - to +)

@@ -483,11 +483,14 @@ read_io_metadata_raw <- function(filename, file_type, band_names,
 }
 
 # Read & assign metadata for netcdf file
-read_io_metadata_cdf <- function(filename, ...) {
+read_io_metadata_cdf <- function(filename, file_type, band_names,
+                                 version, order, firstyear, nyear, firstcell,
+                                 ncell, nbands, cellsize_lon, scalar,
+                                 cellsize_lat, datatype, nstep, timestep,
+                                 endian, variable, descr, unit, name, silent) {
 
-  args <- list(...)
   # Read file_header
-  meta_data <- read_cdf_meta(filename, args[["variable_name"]])
+  meta_data <- read_cdf_meta(filename, variable)
   file_header <- meta_data$as_header()
 
   # Check validity of band_names
@@ -512,6 +515,14 @@ read_io_metadata_cdf <- function(filename, ...) {
       unname(default(args[["name"]], get_header_item(file_header, "name"))[1])
     )
   }
+  
+  # todo: Update meta_data with additional attributes
+  #meta_data <- LPJmLMetaData$new(
+  #  x = file_header,
+  #  additional_attributes = additional_attributes,
+  #  data_dir = dirname(filename)
+  #)
+  
   meta_data
 }
 

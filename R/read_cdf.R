@@ -10,34 +10,45 @@ get_timestep <- function(file_nc) {
 
   if (grepl("[[:digit:]]", tunit)) {
     time_cf <- CFtime::CFtime(definition = tunit, 
-                              calendar = file_nc$dim$time$calendar#,
-                              #offsets currently don't work with LPJmL outputs (negative)
-                              #offsets = ncdf4::ncvar_get(nc = file_nc,varid = "time") 
+                              calendar = file_nc$dim$time$calendar,
+                              offsets = ncdf4::ncvar_get(nc = file_nc,varid = "time") 
     )
-    
+    dates <- CFtime::parse_timestamps(t = time_cf,
+                                      x = CFtime::as_timestamp(time_cf))
+    rows <- dim(dates)[1]
+    ddiff_all <- dates[2:rows,1:3] - dates[1:(rows-1),1:3]
+    ddiff <- apply(X = ddiff_all, MARGIN = c(2),FUN = median)
     if (CFtime::unit(time_cf) == "years") {
       time_res <- "annual"
-      base_year <- CFtime::origin(time_cf)$year
-      offset_year <- time_values[1]
-      first_year <- base_year + offset_year
+      first_year <- CFtime::parse_timestamps(t = time_cf,
+                                  x = CFtime::as_timestamp(time_cf)[1])$year
+      if (ddiff["year"] > 1) timestep <- ddiff["year"]
     } else if (CFtime::unit(time_cf) == "months") {
       time_res <- "monthly"
-      base_year <- CFtime::origin(time_cf)$year
-      offset_year <- time_values[1]/12
-      first_year <- base_year + offset_year
-    } else if (CFtime::unit(time_cf) == "days") {
-      ddiff <- time_values[2] - time_values[1]
-      base_year <- CFtime::origin(time_cf)$year
-      offset_year <- floor(time_values[1] / 365)
-      first_year <- base_year + offset_year
-      
-      if (ddiff > 27 && ddiff < 32) {
-        time_res <- "monthly"
-      } else if (ddiff > 364 && ddiff < 367) {
+      first_year <- CFtime::parse_timestamps(t = time_cf,
+                                  x = CFtime::as_timestamp(time_cf)[1])$year
+      if (ddiff["year"] > 0) {
         time_res <- "annual"
-      } else if (ddiff == 1) {
+      } 
+      if (ddiff["month"] > 0) {
+        time_res <- "monthly"
+      }
+      if (ddiff["month"] > 1) timestep <- ddiff["year"]
+    } else if (CFtime::unit(time_cf) == "days") {
+      first_year <- CFtime::parse_timestamps(t = time_cf,
+                                  x = CFtime::as_timestamp(time_cf)[1])$year
+
+      time_res <- ""
+      if (ddiff["year"] > 0) {
+        time_res <- "annual"
+      } 
+      if (ddiff["month"] > 0) {
+        time_res <- "monthly"
+      }
+      if (ddiff["day"] > 0) {
         time_res <- "daily"
-      } else {
+      }
+      if (time_res == "") {
         stop("Automatic detection of firstyear and time resolution failed.")
       }
     } else {
@@ -66,11 +77,9 @@ get_timestep <- function(file_nc) {
 # utility function to guess the main variable of a netcdf file
 get_main_variable <- function(file_nc) {
   for (variable_name in names(file_nc$var)) {
-    ndims <- file_nc$var[[variable_name]]$ndims
-    dim_names <- c()
-    for (d in 1:ndims) {
-      dim_names <- append(dim_names, file_nc$var[[variable_name]]$dim[[d]]$name)
-    }
+    
+    dim_names <- sapply(file_nc$var[[variable_name]]$dim, function(x) x$name)
+
     if (grepl("lon", paste(dim_names, collapse = " "), ignore.case = TRUE) &&
         grepl("lat", paste(dim_names, collapse = " "), ignore.case = TRUE)
     ) {
@@ -106,19 +115,15 @@ read_cdf_meta <- function(
   ## spatial dimensions
   # get lon/lat information
   total_dim_names <- names(file_nc$dim)
-  latdim <- which(grepl("lat", total_dim_names, ignore.case = TRUE))
-  londim <- which(grepl("lon", total_dim_names, ignore.case = TRUE))
+  latdim <- grep("lat", total_dim_names, ignore.case = TRUE)
+  londim <- grep("lon", total_dim_names, ignore.case = TRUE)
   lon <- file_nc$dim[[londim]]$vals
   lat <- file_nc$dim[[latdim]]$vals
   nlon <- length(lon)
   nlat <- length(lat)
   
   # now only the main variable dimensions
-  ndims <- file_nc$var[[variable_name]]$ndims
-  dim_names <- c()
-  for (d in 1:ndims) {
-    dim_names <- append(dim_names, file_nc$var[[variable_name]]$dim[[d]]$name)
-  }
+  dim_names <- sapply(file_nc$var[[variable_name]]$dim, function(x) x$name)
   
   # take the median difference between the cells as the resolution
   if (nlon > 1) {
@@ -149,15 +154,16 @@ read_cdf_meta <- function(
 
   if (!is.null(time_info)) {
     if (grepl("[[:digit:]]", file_nc$dim$time$units)) {
-      time_cf <- CFtime::CFtime(definition = file_nc$dim$time$units, 
-                                calendar = file_nc$dim$time$calendar
-                                # todo: missing the offset here
+      time_cf <- CFtime::CFtime(
+                        definition = file_nc$dim$time$units, 
+                        calendar = file_nc$dim$time$calendar,
+                        offsets = ncdf4::ncvar_get(nc = file_nc,varid = "time") 
                                 )
     }
     time_res <- time_info$time_res
     meta_list$firstyear <- time_info$first_year
     meta_list$timestep <- time_info$timestep
-
+    
     if (time_res == "annual") {
       meta_list$nyear <- length(time_values)
       meta_list$nstep <- 1
@@ -165,12 +171,12 @@ read_cdf_meta <- function(
       meta_list$nyear <- length(time_values) / 12
       meta_list$nstep <- 12
     } else if (time_res == "daily") {
-      # todo: here we need to know the specific years (offset) 
-      #       to determine the exact number of days
-      
-      days_per_year <- sum(CFtime::month_days(time_cf)) 
-      meta_list$nyear <- round(length(time_values) / days_per_year)
-      meta_list$nstep <- days_per_year
+      dates <- CFtime::parse_timestamps(t = time_cf,
+                                        x = CFtime::as_timestamp(time_cf))[1:3]
+      rows <- dim(dates)[1]
+      dates[rows,1] - dates[1,1]
+      meta_list$nyear <- dates[rows,1] - dates[1,1] + 1
+      meta_list$nstep <- 365 # per definition we can currently only handle this
       
       if (!all.equal(round(meta_list$nyear, 0), meta_list$nyear)) {
         stop(
@@ -196,9 +202,9 @@ read_cdf_meta <- function(
   
   # get the first of the variable names that has not been identified as the
   # main variable or one of time, lat or lon band names
-  lat_name <- dim_names[which(grepl("lat", dim_names, ignore.case = TRUE))]
-  lon_name <- dim_names[which(grepl("lon", dim_names, ignore.case = TRUE))]
-  time_name <- dim_names[which(grepl("time", dim_names, ignore.case = TRUE))]
+  lat_name <- dim_names[grep("lat", dim_names, ignore.case = TRUE)]
+  lon_name <- dim_names[grep("lon", dim_names, ignore.case = TRUE)]
+  time_name <- dim_names[grep("time", dim_names, ignore.case = TRUE)]
   
   dimnames_reduced <- setdiff(dim_names, c(variable_name, lat_name, lon_name, time_name))
   
@@ -324,22 +330,16 @@ read_cdf <- function(
 
   # get lon/lat information
   total_dim_names <- names(file_nc$dim)
-  latdim <- which(grepl("lat", total_dim_names, ignore.case = TRUE))
-  londim <- which(grepl("lon", total_dim_names, ignore.case = TRUE))
+  latdim <- grep("lat", total_dim_names, ignore.case = TRUE)
+  londim <- grep("lon", total_dim_names, ignore.case = TRUE)
   lon <- file_nc$dim[[londim]]$vals
   lat <- file_nc$dim[[latdim]]$vals
   nlon <- length(lon)
   nlat <- length(lat)
   
   # now only the main variable dimensions
-  ndims <- file_nc$var[[variable_name]]$ndims
-  dim_names <- c()
-  for (d in 1:ndims) {
-    dim_names <- append(dim_names, file_nc$var[[variable_name]]$dim[[d]]$name)
-  }
-
-
-
+  dim_names <- sapply(file_nc$var[[variable_name]]$dim, function(x) x$name)
+  
   # create empty data array to fill in next step
   outdata <- array(
     NA,
@@ -421,6 +421,7 @@ read_cdf <- function(
   outdata <- transpose_lon_lat(outdata)
 
   ncdf4::nc_close(file_nc)
-
+  
+  # todo: delete leap days here
   return(outdata)
 }
