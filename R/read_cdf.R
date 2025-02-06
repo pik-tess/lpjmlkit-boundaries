@@ -129,23 +129,31 @@ read_cdf_meta <- function(
   # now only the main variable dimensions
   dim_names <- sapply(file_nc$var[[variable_name]]$dim, function(x) x$name)
   
-  # take the median difference between the cells as the resolution
-  if (nlon > 1) {
-  spatial_difference_lon <- lon[2:length(lon)] - lon[1:(length(lon) - 1)]
-  resolution_lon <- abs(stats::median(spatial_difference_lon))
-  }
-  if (nlat > 1) {
-  spatial_difference_lat <- lat[2:length(lat)] - lat[1:(length(lat) - 1)]
-  resolution_lat <- abs(stats::median(spatial_difference_lat))
-  }
-  # if we have only a subset, we need to make some assumptions for the resolution
-  if (nlat == 1 && nlon == 1) {
-    resolution_lat <- 0.5
-    resolution_lon <- 0.5
-  } else if (nlat == 1 && nlon > 1) {
-    resolution_lat <- resolution_lon
-  } else if (nlat > 1 && nlon == 1) {
-    resolution_lon <- resolution_lat
+
+  if (length(grep("lat_bnds|lon_bnds",names(file_nc$var))) == 2) {
+    lon_bnds <- ncdf4::ncvar_get(file_nc, "lon_bnds")
+    lat_bnds <- ncdf4::ncvar_get(file_nc, "lat_bnds")
+    resolution_lon <- abs(min(lon_bnds[2,] - lon_bnds[1,]))
+    resolution_lat <- abs(min(lat_bnds[2,] - lat_bnds[1,]))
+  } else {
+    # take the median difference between the cells as the resolution
+    if (nlon > 1) {
+      spatial_difference_lon <- lon[2:length(lon)] - lon[1:(length(lon) - 1)]
+      resolution_lon <- abs(min(spatial_difference_lon))
+    }
+    if (nlat > 1) {
+      spatial_difference_lat <- lat[2:length(lat)] - lat[1:(length(lat) - 1)]
+      resolution_lat <- abs(min(spatial_difference_lat))
+    }
+    # if we have only a subset, we need to make some assumptions for the resolution
+    if (nlat == 1 && nlon == 1) {
+      resolution_lat <- 0.5
+      resolution_lon <- 0.5
+    } else if (nlat == 1 && nlon > 1) {
+      resolution_lat <- resolution_lon
+    } else if (nlat > 1 && nlon == 1) {
+      resolution_lon <- resolution_lat
+    }
   }
   global_attributes <- ncdf4::ncatt_get(file_nc, 0)
   var_attributes <- ncdf4::ncatt_get(file_nc, variable_name)
