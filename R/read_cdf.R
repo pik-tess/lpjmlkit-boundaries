@@ -204,7 +204,11 @@ read_cdf_meta <- function(
   } else {
     
     if (!variable_name %in% c("cellid", "grid", "LPJGRID")) {
-      print("Time information could not be extracted from the netcdf file. Using defaults.")
+      if (!silent)
+        warning(
+          "Time information could not be extracted from the netcdf file.", 
+          "Using defaults."
+        )
     }
     meta_list$firstyear <- 0
     meta_list$lastyear <- 0
@@ -224,7 +228,11 @@ read_cdf_meta <- function(
   if (length(dimnames_reduced) > 0) {
     bands_var_name <- dimnames_reduced[1]
     if (length(dimnames_reduced) > 1) {
-      print(paste("Several potential band dimensions detected. Picking:",bands_var_name))
+      if (!silent)
+        warning(
+          "Several potential band dimensions detected. Picking: ",
+          bands_var_name
+        )
     }
     bands <- ncdf4::ncvar_get(nc = file_nc, varid = bands_var_name)
   } else {
@@ -304,7 +312,7 @@ read_cdf <- function(
     if (!all(names(subset) %in% c("year", "band"))) {
       stop(
         "Subset must be a list with elements of the array dimensions ",
-        "'lon', 'lat', 'year', 'band'."
+        "'year', 'band'."
       )
     }
   }
