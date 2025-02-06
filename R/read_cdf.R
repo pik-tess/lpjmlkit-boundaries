@@ -1,7 +1,5 @@
 # TODOs:
-# - leap year handling
-# - handling/replacing additional_parameters in meta_data
-# - check handling of non-default nc's
+# - speed?
 
 # utility function to determine time resolution of a netcdf file
 get_timestep <- function(file_nc) {
@@ -27,32 +25,32 @@ get_timestep <- function(file_nc) {
       ddiff_all <- dates[2:rows,1:3] - dates[1:(rows-1),1:3]
       ddiff <- apply(X = ddiff_all, MARGIN = c(2),FUN = median)
     } else {
-      ddiff <- dates - dates + c(1,0,0) # will always be 1/1/1 and thus evaluated as daily
+      ddiff <- drop(dates - dates + c(1,0,0)) # will always be 1/1/1 and thus evaluated as daily
     }
     if (CFtime::unit(time_cf) == "years") {
       time_res <- "annual"
       first_year <- dates[1,1]
-      if (ddiff[,"year"] > 1) timestep <- ddiff[,"year"]
+      if (ddiff["year"] > 1) timestep <- ddiff["year"]
     } else if (CFtime::unit(time_cf) == "months") {
       time_res <- "monthly"
       first_year <- dates[1,1]
-      if (ddiff[,"year"] > 0) {
+      if (ddiff["year"] > 0) {
         time_res <- "annual"
       } 
-      if (ddiff[,"month"] > 0) {
+      if (ddiff["month"] > 0) {
         time_res <- "monthly"
       }
-      if (ddiff[,"month"] > 1) timestep <- ddiff[,"year"]
+      if (ddiff["month"] > 1) timestep <- ddiff["year"]
     } else if (CFtime::unit(time_cf) == "days") {
       first_year <- dates[1,1]
       time_res <- ""
-      if (ddiff[,"year"] > 0) {
+      if (ddiff["year"] > 0) {
         time_res <- "annual"
       }
-      if (ddiff[,"month"] > 0) {
+      if (ddiff["month"] > 0) {
         time_res <- "monthly"
       }
-      if (ddiff[,"day"] > 0) {
+      if (ddiff["day"] > 0) {
         time_res <- "daily"
       }
       if (time_res == "") {
@@ -256,11 +254,7 @@ read_cdf_meta <- function(
 
   ncdf4::nc_close(file_nc)
 
-  meta_data <- lpjmlkit::LPJmLMetaData$new(
-    x = meta_list,
-    data_dir = dirname(filename)
-  )
-  meta_data
+  meta_list
 }
 
 #' Reads netcdf and returns it as array
@@ -424,7 +418,10 @@ read_cdf <- function(
   outdata <- transpose_lon_lat(outdata)
 
   ncdf4::nc_close(file_nc)
+
+  # delete leap days
+  leapdays <- grep("-02-29",dimnames(outdata)$time)
+  outdata[ , , leapdays, ] <- 0
   
-  # todo: delete leap days here
   return(outdata)
 }

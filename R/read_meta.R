@@ -56,8 +56,13 @@ read_meta <- function(filename, ...) {
 
     # Handling of CDF files
   } else if (file_type == "cdf") {
-    meta_object <- read_cdf_meta(filename, ...)
+    meta_data_list <- read_cdf_meta(filename, ...)
 
+    meta_object <- LPJmLMetaData$new(
+      x = meta_data_list,
+      data_dir = dirname(filename)
+    )
+    
     # Other formats are not supported yet
   } else {
     stop("Non readable (meta) file format.")

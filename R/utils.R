@@ -41,6 +41,19 @@ default <- function(value, default) {
   }
 }
 
+# function to merge two lists with priority to first list
+# list items from secondary are only preferred if they are NULL or not in priority 
+merge_lists <- function(priority, secondary) {
+  merged_lists <- priority
+  for (item in names(secondary)) {
+    if (!is.null(secondary[[item]])) {
+      if (is.null(priority[[item]])) {
+        merged_lists[[item]] <- secondary[[item]]
+      }
+    }
+  }
+  merged_lists
+}
 
 # Drop dimensions of length 1 except those that are selected by name
 drop_omit <- function(x, omit_dim) {

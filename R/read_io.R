@@ -489,41 +489,39 @@ read_io_metadata_cdf <- function(filename, file_type, band_names,
                                  cellsize_lat, datatype, nstep, timestep,
                                  endian, variable, descr, unit, name, silent) {
 
-  # Read file_header
-  meta_data <- read_cdf_meta(filename, variable)
-  file_header <- meta_data$as_header()
-
-  # Check validity of band_names
-  check_band_names(get_header_item(file_header, "nbands"),
-                   meta_data$band_names)
-
-  # Prepare additional attributes to be added to meta information
-  additional_attributes <- list(
-    band_names = unname(meta_data$band_names),
-    variable = unname(meta_data$variable),
-    descr = unname(meta_data$descr),
-    unit = unname(meta_data$unit)
+  # Read meta information from netcdf
+  meta_data_list <- read_cdf_meta(filename, variable)
+  
+  # create a list from the manually supplied attributes
+  manual_attributes <- list(
+    band_names = band_names,
+    order = order, 
+    firstyear = firstyear, 
+    nyear = nyear, 
+    firstcell = firstcell,
+    ncell = ncell, 
+    nbands = nbands, 
+    cellsize_lon = cellsize_lon, 
+    scalar = scalar,
+    cellsize_lat = cellsize_lat, 
+    datatype = datatype, 
+    nstep = nstep, 
+    timestep = timestep,
+    variable = variable, 
+    descr = descr, 
+    unit = unit, 
+    name = name
   )
-  additional_attributes <-
-    additional_attributes[which(!sapply(additional_attributes, is.null))] # nolint
-  # Use header name as a substitute for variable if variable is not set. Here,
-  # use name argument if supplied by user.
-  if (is.null(additional_attributes[["variable"]]) &&
-      !is.null(args[["name"]])
-  ) {
-    additional_attributes[["variable"]] <- as.character(
-      unname(default(args[["name"]], get_header_item(file_header, "name"))[1])
-    )
-  }
+
+  merged_meta_data <- merge_lists(priority = meta_data_list,
+                                  secondary = manual_attributes)
   
-  # todo: Update meta_data with additional attributes
-  #meta_data <- LPJmLMetaData$new(
-  #  x = file_header,
-  #  additional_attributes = additional_attributes,
-  #  data_dir = dirname(filename)
-  #)
+  meta_data <- LPJmLMetaData$new(
+    x = merged_meta_data,
+    data_dir = dirname(filename)
+  )
   
-  meta_data
+    meta_data
 }
 
 # Read & assign metadata for binary file with a header
