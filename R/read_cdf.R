@@ -1,3 +1,8 @@
+# TODOs:
+# - leap year handling
+# - handling/replacing additional_parameters in meta_data
+# - check handling of non-default nc's
+
 # utility function to determine time resolution of a netcdf file
 get_timestep <- function(file_nc) {
   tunit <- file_nc$dim$time$units
@@ -11,50 +16,51 @@ get_timestep <- function(file_nc) {
   if (grepl("[[:digit:]]", tunit)) {
     time_cf <- CFtime::CFtime(definition = tunit, 
                               calendar = file_nc$dim$time$calendar,
-                              offsets = ncdf4::ncvar_get(nc = file_nc,varid = "time") 
+                              offsets = ncdf4::ncvar_get(nc = file_nc,varid = "time")
     )
-    dates <- CFtime::parse_timestamps(t = time_cf,
-                                      x = CFtime::as_timestamp(time_cf))
-    rows <- dim(dates)[1]
-    ddiff_all <- dates[2:rows,1:3] - dates[1:(rows-1),1:3]
-    ddiff <- apply(X = ddiff_all, MARGIN = c(2),FUN = median)
+    rows <- length(time_cf)
+    dates <- matrix(as.integer(unlist(strsplit(
+      x = CFtime::as_timestamp(time_cf),split = "-"))),ncol = 3, byrow = T,
+      dimnames = list(1:rows, c("year","month","day")))
+    
+    if (rows > 1) {
+      ddiff_all <- dates[2:rows,1:3] - dates[1:(rows-1),1:3]
+      ddiff <- apply(X = ddiff_all, MARGIN = c(2),FUN = median)
+    } else {
+      ddiff <- dates - dates + c(1,0,0) # will always be 1/1/1 and thus evaluated as daily
+    }
     if (CFtime::unit(time_cf) == "years") {
       time_res <- "annual"
-      first_year <- CFtime::parse_timestamps(t = time_cf,
-                                  x = CFtime::as_timestamp(time_cf)[1])$year
-      if (ddiff["year"] > 1) timestep <- ddiff["year"]
+      first_year <- dates[1,1]
+      if (ddiff[,"year"] > 1) timestep <- ddiff[,"year"]
     } else if (CFtime::unit(time_cf) == "months") {
       time_res <- "monthly"
-      first_year <- CFtime::parse_timestamps(t = time_cf,
-                                  x = CFtime::as_timestamp(time_cf)[1])$year
-      if (ddiff["year"] > 0) {
+      first_year <- dates[1,1]
+      if (ddiff[,"year"] > 0) {
         time_res <- "annual"
       } 
-      if (ddiff["month"] > 0) {
+      if (ddiff[,"month"] > 0) {
         time_res <- "monthly"
       }
-      if (ddiff["month"] > 1) timestep <- ddiff["year"]
+      if (ddiff[,"month"] > 1) timestep <- ddiff[,"year"]
     } else if (CFtime::unit(time_cf) == "days") {
-      first_year <- CFtime::parse_timestamps(t = time_cf,
-                                  x = CFtime::as_timestamp(time_cf)[1])$year
-
+      first_year <- dates[1,1]
       time_res <- ""
-      if (ddiff["year"] > 0) {
+      if (ddiff[,"year"] > 0) {
         time_res <- "annual"
-      } 
-      if (ddiff["month"] > 0) {
+      }
+      if (ddiff[,"month"] > 0) {
         time_res <- "monthly"
       }
-      if (ddiff["day"] > 0) {
+      if (ddiff[,"day"] > 0) {
         time_res <- "daily"
       }
       if (time_res == "") {
         stop("Automatic detection of firstyear and time resolution failed.")
       }
     } else {
-      stop("Automatic detection of firstyear and time resolution failed.")
+        stop("Automatic detection of firstyear and time resolution failed.")
     }
-    
   } else {
     if (grepl("year", tunit, ignore.case = TRUE)) {
       time_res <- "annual"
@@ -171,6 +177,7 @@ read_cdf_meta <- function(
       meta_list$nyear <- length(time_values) / 12
       meta_list$nstep <- 12
     } else if (time_res == "daily") {
+      # here we don't have to catch tunit == "years/months since X" 
       dates <- CFtime::parse_timestamps(t = time_cf,
                                         x = CFtime::as_timestamp(time_cf))[1:3]
       rows <- dim(dates)[1]
@@ -259,8 +266,6 @@ read_cdf_meta <- function(
 #' Reads netcdf and returns it as array
 #'
 #' Reads an arbitrary netcdf and returns the values at the lon/lat locations..
-#' Todos:
-#' - subsetting cells/days/months does not work yet
 #'
 #' @param filename netcdf file name
 #' @param nc_header header data, read in from either meta file or data in
@@ -378,7 +383,7 @@ read_cdf <- function(
         
       } else if (length(dim_names) == 3) { # time, lon, lat or bands, lon, lat
         
-        if (nbands == 1 && length(timesteps) > 1) { # lon, lat, time 
+        if ("time" %in% dim_names) { # lon, lat, time 
           outdata[, , time_idx, band_idx] <- 
             ncdf4::ncvar_get(
               nc = file_nc, varid = variable_name, 
@@ -386,7 +391,7 @@ read_cdf <- function(
               start = c(1, 1, i_time),
               collapse_degen = FALSE
             )[,,1] # drop time
-        } else if (nbands > 1 && length(timesteps) == 1) { # lat, lon, band
+        } else { # lat, lon, band
           outdata[, , time_idx, band_idx] <- 
             ncdf4::ncvar_get(
               nc = file_nc,
@@ -395,9 +400,7 @@ read_cdf <- function(
               start = c(1, 1, i_band),
               collapse_degen = FALSE
             )[,,1] # drop band
-        } else {
-          stop("Dimensions don't add up.")
-        }# end if nbands == 1
+        }
         
       }else if (length(dim_names) == 2) {
         
