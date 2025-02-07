@@ -1,7 +1,8 @@
 # outputs in cdf format
-test_that("read io - .nc - npp", {
+test_that("read io - .nc - read, attach grid, transform to cell", {
   
   grid_file <- "../testdata/output/grid.bin.json"
+  
   # test reading the file
   out_filename <- "../testdata/output/npp.nc"
   out <- read_io(
@@ -10,7 +11,7 @@ test_that("read io - .nc - npp", {
   expect_true(exists("out"))
   expect_true("LPJmLData" %in% class(out))
 
-  # test attaching the grid and converting to LPJmL array
+  # test attaching a grid and converting to LPJmL array
   out_transformed <- out %>% lpjmlkit::transform(to = c("year_month_day")) %>%
     lpjmlkit::add_grid(grid_file) %>%
     lpjmlkit::transform(to = "cell") %>%
@@ -18,15 +19,52 @@ test_that("read io - .nc - npp", {
     drop() 
   expect_true(exists("out_transformed"))
   
-  # test a banded output
+})
+
+test_that("read io - .nc - read meta", {
+  
   out_filename <- "../testdata/output/pft_npp.nc"
-  out <- read_io(filename = out_filename) %>% 
+  meta <- read_meta(filename = out_filename)
+
+  expect_true(exists("meta"))
+  expect_identical(
+    c(meta$nyear,
+      meta$variable,
+      meta$nbands,
+      meta$ncell,
+      meta$datatype,
+      meta$band_names[16]),
+    c(11,
+      "pft_npp",
+      43,
+      18,
+      "float",
+      "rainfed pulses"
+    )
+  )
+  
+})
+
+test_that("read io - .nc - banded input + subsetting", {
+  
+  grid_file <- "../testdata/output/grid.bin.json"
+  
+  out_filename <- "../testdata/output/pft_npp.nc"
+  out <- read_io(filename = out_filename, 
+                 subset = list(year = as.character(2002:2003), 
+                               band = c("Polar C3 grass","rainfed pulses"))) %>% 
     lpjmlkit::transform(to = c("year_month_day")) %>%
     lpjmlkit::add_grid(grid_file) %>%
     lpjmlkit::transform(to = "cell") %>%
     lpjmlkit::as_array() %>%
     drop()
   expect_true(exists("out"))
+  
+})
+
+test_that("read io - .nc - banded input", {
+  
+  grid_file <- "../testdata/output/grid.bin.json"
   
   # test a monthly output
   out_filename <- "../testdata/output/transp.nc"
@@ -38,6 +76,12 @@ test_that("read io - .nc - npp", {
     drop() 
   expect_true(exists("out"))
 
+})
+
+test_that("read io - .nc - daily input", {
+  
+  grid_file <- "../testdata/output/grid.bin.json"
+  
   # test daily input
   out_filename <- "../testdata/output/ddischarge_1901-1902.nc"
   out <- read_io(out_filename) %>%
@@ -46,7 +90,7 @@ test_that("read io - .nc - npp", {
     lpjmlkit::transform(to = "cell") %>%
     lpjmlkit::as_array() %>%
     drop()
-  expect_true(exist("out"))
+  expect_true(exists("out"))
   dims <- as.integer(c(3,31,12,2))
   names(dims) <- c("cell","day","month","year")
   expect_identical(

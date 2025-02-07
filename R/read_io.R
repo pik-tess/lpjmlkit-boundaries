@@ -625,7 +625,7 @@ read_io_metadata_meta <- function(filename, file_type, band_names,
                                   cellsize_lat, datatype, nstep, timestep,
                                   endian, variable, descr, unit, name, silent) {
   # Read meta data
-  meta_data <- read_meta(filename, ...)
+  meta_data <- read_meta(filename)
 
   # Check if user has tried to overwrite any meta attributes which are set
   # already in the JSON. If so, give a warning but still allow for meta files.

@@ -56,18 +56,18 @@ get_timestep <- function(file_nc) {
       if (time_res == "") {
         stop("Automatic detection of firstyear and time resolution failed.")
       }
-      if (time_res == "annual") {
-        nyear <- length(time_values)
-        nstep <- 1
-      } else if (time_res == "monthly") {
-        nyear <- length(time_values) / 12
-        nstep <- 12
-      } else {
-        nyear <- dates[rows,1] - dates[1,1] + 1
-        nstep <- 365
-      }
     } else {
         stop("Automatic detection of firstyear and time resolution failed.")
+    }
+    if (time_res == "annual") {
+      nyear <- length(time_values)
+      nstep <- 1
+    } else if (time_res == "monthly") {
+      nyear <- length(time_values) / 12
+      nstep <- 12
+    } else {
+      nyear <- dates[rows,1] - dates[1,1] + 1
+      nstep <- 365
     }
   } else {
     if (grepl("year", tunit, ignore.case = TRUE)) {
@@ -78,7 +78,6 @@ get_timestep <- function(file_nc) {
     } else {
       stop("Automatic detection of firstyear and time resolution failed.")
     }
-
   }
 
   return(
