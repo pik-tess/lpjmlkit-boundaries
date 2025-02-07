@@ -56,6 +56,16 @@ get_timestep <- function(file_nc) {
       if (time_res == "") {
         stop("Automatic detection of firstyear and time resolution failed.")
       }
+      if (time_res == "annual") {
+        nyear <- length(time_values)
+        nstep <- 1
+      } else if (time_res == "monthly") {
+        nyear <- length(time_values) / 12
+        nstep <- 12
+      } else {
+        nyear <- dates[rows,1] - dates[1,1] + 1
+        nstep <- 365
+      }
     } else {
         stop("Automatic detection of firstyear and time resolution failed.")
     }
@@ -63,15 +73,19 @@ get_timestep <- function(file_nc) {
     if (grepl("year", tunit, ignore.case = TRUE)) {
       time_res <- "annual"
       first_year <- time_values[1]
+      nyear <- length(time_values)
       timestep <- time_values[2] - time_values[1]
     } else {
       stop("Automatic detection of firstyear and time resolution failed.")
     }
+
   }
 
   return(
     list(
       time_res = time_res,
+      nyear = nyear,
+      nstep = nstep,
       first_year = as.numeric(first_year),
       timestep = timestep
     )
@@ -106,7 +120,8 @@ get_main_variable <- function(file_nc) {
 #'
 read_cdf_meta <- function(
   filename,
-  variable_name = NULL
+  variable_name = NULL,
+  silent = TRUE
 ) {
   file_type <- lpjmlkit::detect_io_type(filename = filename)
 
@@ -128,7 +143,6 @@ read_cdf_meta <- function(
   
   # now only the main variable dimensions
   dim_names <- sapply(file_nc$var[[variable_name]]$dim, function(x) x$name)
-  
 
   if (length(grep("lat_bnds|lon_bnds",names(file_nc$var))) == 2) {
     lon_bnds <- ncdf4::ncvar_get(file_nc, "lon_bnds")
@@ -165,39 +179,12 @@ read_cdf_meta <- function(
   time_info <- get_timestep(file_nc = file_nc)
 
   if (!is.null(time_info)) {
-    if (grepl("[[:digit:]]", file_nc$dim$time$units)) {
-      time_cf <- CFtime::CFtime(
-                        definition = file_nc$dim$time$units, 
-                        calendar = file_nc$dim$time$calendar,
-                        offsets = ncdf4::ncvar_get(nc = file_nc,varid = "time") 
-                                )
-    }
+
     time_res <- time_info$time_res
     meta_list$firstyear <- time_info$first_year
     meta_list$timestep <- time_info$timestep
-    
-    if (time_res == "annual") {
-      meta_list$nyear <- length(time_values)
-      meta_list$nstep <- 1
-    } else if (time_res == "monthly") {
-      meta_list$nyear <- length(time_values) / 12
-      meta_list$nstep <- 12
-    } else if (time_res == "daily") {
-      # here we don't have to catch tunit == "years/months since X" 
-      dates <- CFtime::parse_timestamps(t = time_cf,
-                                        x = CFtime::as_timestamp(time_cf))[1:3]
-      rows <- dim(dates)[1]
-      dates[rows,1] - dates[1,1]
-      meta_list$nyear <- dates[rows,1] - dates[1,1] + 1
-      meta_list$nstep <- 365 # per definition we can currently only handle this
-      
-      if (!all.equal(round(meta_list$nyear, 0), meta_list$nyear)) {
-        stop(
-          "Number of time records not a multiple of 365 - pls check calendar"
-        )
-      }
-    }
-    
+    meta_list$nyear <- time_info$nyear
+    meta_list$nstep <- time_info$nstep
     meta_list$lastyear <- meta_list$firstyear + 
                                      (meta_list$nyear - 1) * meta_list$timestep
 
@@ -219,22 +206,24 @@ read_cdf_meta <- function(
   
   # get the first of the variable names that has not been identified as the
   # main variable or one of time, lat or lon band names
-  lat_name <- dim_names[grep("lat", dim_names, ignore.case = TRUE)]
-  lon_name <- dim_names[grep("lon", dim_names, ignore.case = TRUE)]
-  time_name <- dim_names[grep("time", dim_names, ignore.case = TRUE)]
+  lat_name <- varnames[grep("lat", varnames, ignore.case = TRUE)]
+  lon_name <- varnames[grep("lon", varnames, ignore.case = TRUE)]
+  time_name <- varnames[grep("time", varnames, ignore.case = TRUE)]
   
-  dimnames_reduced <- setdiff(dim_names, c(variable_name, lat_name, lon_name, time_name))
+  varnames_reduced <- setdiff(varnames, c(variable_name, lat_name, lon_name, time_name))
   
-  if (length(dimnames_reduced) > 0) {
-    bands_var_name <- dimnames_reduced[1]
-    if (length(dimnames_reduced) > 1) {
+  if (length(varnames_reduced) > 0) {
+    bands_var_name <- varnames_reduced[1]
+    if (length(varnames_reduced) > 1) {
       if (!silent)
         warning(
           "Several potential band dimensions detected. Picking: ",
           bands_var_name
         )
     }
+
     bands <- ncdf4::ncvar_get(nc = file_nc, varid = bands_var_name)
+
   } else {
     bands_var_name <- ""
     bands <- 1
@@ -263,6 +252,8 @@ read_cdf_meta <- function(
   meta_list$filename <- basename(filename)
   meta_list$subset <- FALSE
   meta_list$datatype <- file_nc$var[[variable_name]]$prec
+  if (!meta_list$datatype %in% c("byte","short","int","float","double",0,1,2,3,4))
+    stop(paste0("Unknown datatype: ",meta_list$datatype))
 
   meta_list$scalar <- 1
   meta_list$order <- "cellseq"
@@ -316,7 +307,7 @@ read_cdf <- function(
       )
     }
   }
-
+  
   # Years to read
   if (!is.null(names(subset)) && "year" %in% names(subset)) {
     if (is.numeric(subset[["year"]])) {
@@ -328,6 +319,14 @@ read_cdf <- function(
   } else {
     timesteps <- seq_along(years_nstep)
     years <- years_nstep
+  }
+
+  # check if subset[["band"]] is valid
+  if ( any(!subset[["band"]] %in% nc_header$band_names) ) {
+    stop(paste("Specified subset bands are unknown. They need to be one of:",
+               paste(nc_header$band_names,collapse = ", ")
+               )
+         )
   }
 
   # bands to read
