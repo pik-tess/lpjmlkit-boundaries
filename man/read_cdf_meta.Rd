@@ -4,7 +4,7 @@
 \alias{read_cdf_meta}
 \title{Reads netcdf and returns it header info}
 \usage{
-read_cdf_meta(filename, variable_name = NULL)
+read_cdf_meta(filename, variable_name = NULL, silent = TRUE)
 }
 \arguments{
 \item{filename}{netcdf file name}
@@ -12,6 +12,8 @@ read_cdf_meta(filename, variable_name = NULL)
 \item{variable_name}{optional variable to be read, in case automatic
 detection does not work as intended or several variables are stored within
 the file}
+
+\item{silent}{logical, if TRUE, warnings are suppressed}
 }
 \value{
 header data

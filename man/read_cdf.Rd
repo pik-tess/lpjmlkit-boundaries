@@ -19,8 +19,4 @@ array with netcdf's data, dim=c(nlon,nlat,bands,steps (months/days),years)
 }
 \description{
 Reads an arbitrary netcdf and returns the values at the lon/lat locations..
-Todos:
-\itemize{
-\item subsetting cells/days/months does not work yet
-}
 }
