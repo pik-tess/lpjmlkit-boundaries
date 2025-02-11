@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: If you use this software, please cite it using the metadata from this file.
 type: software
 title: 'lpjmlkit: Toolkit for Basic LPJmL Handling'
-version: 1.7.7-boundaries.0
+version: 1.7.7-boundaries.1
 date-released: '2025-02-11'
 abstract: A collection of basic functions to facilitate the work with the Dynamic
   Global Vegetation Model (DGVM) Lund-Potsdam-Jena managed Land (LPJmL) hosted at
@@ -39,5 +39,5 @@ authors:
   orcid: https://orcid.org/0000-0002-9491-3550
 license: AGPL-3.0
 repository-code: https://github.com/PIK-LPJmL/lpjmlkit
-doi: 10.5281/zenodo.7773134
+doi: 10.5281/zenodo.14850990
 
